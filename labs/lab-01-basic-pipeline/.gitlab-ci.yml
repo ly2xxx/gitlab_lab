@@ -1,0 +1,30 @@
+# Lab 1: Basic Pipeline Example
+# This is a simple pipeline to demonstrate GitLab CI/CD basics
+
+variables:
+  GREETING: "Hello from GitLab CI/CD"
+  PROJECT_NAME: "GitLab Tutorial"
+
+hello_world:
+  script:
+    - echo "$GREETING"
+    - echo "Project: $PROJECT_NAME"
+    - echo "GitLab variables:"
+    - echo "Project: $CI_PROJECT_NAME"
+    - echo "Branch: $CI_COMMIT_REF_NAME"
+    - echo "Pipeline ID: $CI_PIPELINE_ID"
+    - echo "Commit SHA: $CI_COMMIT_SHA"
+    - echo "Runner: $CI_RUNNER_DESCRIPTION"
+
+show_environment:
+  script:
+    - echo "Runner environment information:"
+    - echo "Operating System:"
+    - cat /etc/os-release 2>/dev/null || echo "Not a Linux system or /etc/os-release not available"
+    - echo "Available tools:"
+    - echo "Git version:" && git --version 2>/dev/null || echo "Git not available"
+    - echo "Curl version:" && curl --version 2>/dev/null || echo "Curl not available"
+    - echo "Current directory contents:"
+    - ls -la
+    - echo "Environment variables (CI_* only):"
+    - env | grep ^CI_ | sort
