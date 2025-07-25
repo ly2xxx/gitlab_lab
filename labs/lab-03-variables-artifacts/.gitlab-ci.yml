@@ -1,0 +1,617 @@
+# Lab 3: Variables and Artifacts Example
+# This pipeline demonstrates comprehensive variable usage and artifact management
+
+# Global variables available to all jobs
+variables:
+  # Application configuration
+  APP_NAME: "Variable Demo App"
+  APP_VERSION: "1.2.3"
+  BUILD_TARGET: "production"
+  
+  # Build configuration
+  BUILD_DIR: "dist"
+  ARTIFACT_DIR: "artifacts"
+  LOG_LEVEL: "INFO"
+  
+  # Environment URLs
+  STAGING_URL: "https://staging.example.com"
+  PROD_URL: "https://production.example.com"
+  
+  # Dynamic variables
+  DYNAMIC_VERSION: "${APP_VERSION}-${CI_COMMIT_SHORT_SHA}"
+  BUILD_TAG: "build-${CI_PIPELINE_ID}"
+
+stages:
+  - validate
+  - build
+  - package
+  - deploy
+
+# VALIDATE STAGE - Configuration and environment validation
+validate_config:
+  stage: validate
+  variables:
+    # Job-specific variables (highest precedence)
+    VALIDATION_MODE: "strict"
+    MAX_WARNINGS: "5"
+    TIMEOUT: "30s"
+  script:
+    - echo "======================================"
+    - echo "     Configuration Validation"
+    - echo "======================================"
+    - echo "Global Variables:"
+    - echo "  App: $APP_NAME v$APP_VERSION"
+    - echo "  Build Target: $BUILD_TARGET"
+    - echo "  Build Dir: $BUILD_DIR"
+    - echo "  Artifact Dir: $ARTIFACT_DIR"
+    - echo "  Log Level: $LOG_LEVEL"
+    - echo ""
+    - echo "Environment URLs:"
+    - echo "  Staging: $STAGING_URL"
+    - echo "  Production: $PROD_URL"
+    - echo ""
+    - echo "Dynamic Variables:"
+    - echo "  Dynamic Version: $DYNAMIC_VERSION"
+    - echo "  Build Tag: $BUILD_TAG"
+    - echo ""
+    - echo "Job-specific Variables:"
+    - echo "  Validation Mode: $VALIDATION_MODE"
+    - echo "  Max Warnings: $MAX_WARNINGS"
+    - echo "  Timeout: $TIMEOUT"
+    - echo ""
+    - echo "Built-in GitLab Variables:"
+    - echo "  Project: $CI_PROJECT_NAME"
+    - echo "  Pipeline: $CI_PIPELINE_ID"
+    - echo "  Job: $CI_JOB_NAME"
+    - echo "  Commit: $CI_COMMIT_SHORT_SHA"
+    - echo "  Branch: $CI_COMMIT_REF_NAME"
+    - echo "  Runner: $CI_RUNNER_DESCRIPTION"
+    - echo ""
+    - echo "✓ Configuration validation completed"
+
+validate_environment:
+  stage: validate
+  variables:
+    CHECK_DISK_SPACE: "true"
+    MIN_DISK_GB: "1"
+  script:
+    - echo "======================================"
+    - echo "     Environment Validation"
+    - echo "======================================"
+    - echo "Checking environment requirements..."
+    - echo "Required tools:"
+    - echo "  Git: $(git --version 2>/dev/null || echo 'Not available')"
+    - echo "  Tar: $(tar --version 2>/dev/null | head -1 || echo 'Not available')"
+    - echo ""
+    - if [ "$CHECK_DISK_SPACE" = "true" ]; then
+        echo "Disk space check (min ${MIN_DISK_GB}GB required):"
+        df -h 2>/dev/null || echo "df command not available"
+      fi
+    - echo ""
+    - echo "✓ Environment validation completed"
+
+# BUILD STAGE - Application and documentation building
+build_application:
+  stage: build
+  variables:
+    COMPILER_FLAGS: "-O2 -Wall -Werror"
+    BUILD_TYPE: "release"
+    ENABLE_DEBUG: "false"
+  script:
+    - echo "======================================"
+    - echo "     Application Build"
+    - echo "======================================"
+    - echo "Build Configuration:"
+    - echo "  Type: $BUILD_TYPE"
+    - echo "  Compiler Flags: $COMPILER_FLAGS"
+    - echo "  Debug Enabled: $ENABLE_DEBUG"
+    - echo "  Target: $BUILD_TARGET"
+    - echo ""
+    - echo "Creating build directory: $BUILD_DIR"
+    - mkdir -p $BUILD_DIR $ARTIFACT_DIR logs
+    - echo ""
+    
+    # Simulate building different components
+    - echo "Building main application..."
+    - echo "App: $APP_NAME" > $BUILD_DIR/app-info.txt
+    - echo "Version: $APP_VERSION" >> $BUILD_DIR/app-info.txt
+    - echo "Dynamic Version: $DYNAMIC_VERSION" >> $BUILD_DIR/app-info.txt
+    - echo "Build Target: $BUILD_TARGET" >> $BUILD_DIR/app-info.txt
+    - echo "Build Type: $BUILD_TYPE" >> $BUILD_DIR/app-info.txt
+    - echo "Built: $(date)" >> $BUILD_DIR/app-info.txt
+    - echo "Pipeline: $CI_PIPELINE_ID" >> $BUILD_DIR/app-info.txt
+    - echo "Commit: $CI_COMMIT_SHA" >> $BUILD_DIR/app-info.txt
+    - echo "Compiler Flags: $COMPILER_FLAGS" >> $BUILD_DIR/app-info.txt
+    
+    # Create a fake executable
+    - echo "#!/bin/bash" > $BUILD_DIR/myapp
+    - echo "echo 'Running $APP_NAME v$DYNAMIC_VERSION'" >> $BUILD_DIR/myapp
+    - echo "echo 'Build: $BUILD_TAG'" >> $BUILD_DIR/myapp
+    - echo "echo 'Environment: ${CI_ENVIRONMENT_NAME:-development}'" >> $BUILD_DIR/myapp
+    - chmod +x $BUILD_DIR/myapp
+    
+    # Create configuration files
+    - echo "# Application Configuration" > $BUILD_DIR/config.properties
+    - echo "log.level=$LOG_LEVEL" >> $BUILD_DIR/config.properties
+    - echo "app.name=$APP_NAME" >> $BUILD_DIR/config.properties
+    - echo "app.version=$APP_VERSION" >> $BUILD_DIR/config.properties
+    - echo "app.build_tag=$BUILD_TAG" >> $BUILD_DIR/config.properties
+    - echo "build.type=$BUILD_TYPE" >> $BUILD_DIR/config.properties
+    - echo "build.target=$BUILD_TARGET" >> $BUILD_DIR/config.properties
+    
+    # Generate detailed build logs
+    - echo "=== Build Log ===" > logs/build.log
+    - echo "Build started: $(date)" >> logs/build.log
+    - echo "App: $APP_NAME v$APP_VERSION" >> logs/build.log
+    - echo "Dynamic Version: $DYNAMIC_VERSION" >> logs/build.log
+    - echo "Build Tag: $BUILD_TAG" >> logs/build.log
+    - echo "Compiler: gcc" >> logs/build.log
+    - echo "Flags: $COMPILER_FLAGS" >> logs/build.log
+    - echo "Type: $BUILD_TYPE" >> logs/build.log
+    - echo "Target: $BUILD_TARGET" >> logs/build.log
+    - echo "Pipeline: $CI_PIPELINE_ID" >> logs/build.log
+    - echo "Job: $CI_JOB_ID" >> logs/build.log
+    - echo "Build completed: $(date)" >> logs/build.log
+    
+    - echo "Build completed successfully!"
+    - echo "Generated files:"
+    - ls -la $BUILD_DIR/
+    - echo "Log files:"
+    - ls -la logs/
+  artifacts:
+    name: "$APP_NAME-$DYNAMIC_VERSION-build"
+    paths:
+      - $BUILD_DIR/
+      - logs/build.log
+    exclude:
+      - logs/*.tmp
+      - $BUILD_DIR/*.debug
+    expire_in: 2 hours
+    when: always
+    reports:
+      # Would contain actual build reports in real scenarios
+    expose_as: "Application Build"
+
+generate_documentation:
+  stage: build
+  variables:
+    DOC_FORMAT: "html"
+    DOC_THEME: "material"
+    INCLUDE_API_DOCS: "true"
+    INCLUDE_USER_MANUAL: "true"
+  script:
+    - echo "======================================"
+    - echo "     Documentation Generation"
+    - echo "======================================"
+    - echo "Documentation Configuration:"
+    - echo "  Format: $DOC_FORMAT"
+    - echo "  Theme: $DOC_THEME"
+    - echo "  Include API Docs: $INCLUDE_API_DOCS"
+    - echo "  Include User Manual: $INCLUDE_USER_MANUAL"
+    - echo ""
+    - mkdir -p $ARTIFACT_DIR/docs
+    
+    # Create main documentation index
+    - echo "<!DOCTYPE html>" > $ARTIFACT_DIR/docs/index.html
+    - echo "<html><head><title>$APP_NAME Documentation</title></head><body>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "<h1>$APP_NAME v$APP_VERSION Documentation</h1>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "<h2>Build Information</h2>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "<ul>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "<li>Version: $DYNAMIC_VERSION</li>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "<li>Build Tag: $BUILD_TAG</li>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "<li>Generated: $(date)</li>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "<li>Pipeline: $CI_PIPELINE_ID</li>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "<li>Commit: $CI_COMMIT_SHA</li>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "<li>Branch: $CI_COMMIT_REF_NAME</li>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "</ul>" >> $ARTIFACT_DIR/docs/index.html
+    - echo "</body></html>" >> $ARTIFACT_DIR/docs/index.html
+    
+    # Generate API documentation if enabled
+    - if [ "$INCLUDE_API_DOCS" = "true" ]; then
+        echo "Generating API documentation...";
+        echo "# API Documentation" > $ARTIFACT_DIR/docs/api.md;
+        echo "" >> $ARTIFACT_DIR/docs/api.md;
+        echo "## $APP_NAME API v$APP_VERSION" >> $ARTIFACT_DIR/docs/api.md;
+        echo "" >> $ARTIFACT_DIR/docs/api.md;
+        echo "### Base URLs" >> $ARTIFACT_DIR/docs/api.md;
+        echo "- Staging: $STAGING_URL/api/v1" >> $ARTIFACT_DIR/docs/api.md;
+        echo "- Production: $PROD_URL/api/v1" >> $ARTIFACT_DIR/docs/api.md;
+        echo "" >> $ARTIFACT_DIR/docs/api.md;
+        echo "### Endpoints" >> $ARTIFACT_DIR/docs/api.md;
+        echo "- GET    /health    - Health check" >> $ARTIFACT_DIR/docs/api.md;
+        echo "- GET    /version   - App version" >> $ARTIFACT_DIR/docs/api.md;
+        echo "- POST   /data      - Submit data" >> $ARTIFACT_DIR/docs/api.md;
+      fi
+    
+    # Generate user manual if enabled
+    - if [ "$INCLUDE_USER_MANUAL" = "true" ]; then
+        echo "Generating user manual...";
+        echo "# $APP_NAME User Manual" > $ARTIFACT_DIR/docs/manual.md;
+        echo "" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "Version: $APP_VERSION" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "Build: $BUILD_TAG" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "## Installation" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "1. Download the application package" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "2. Extract to desired directory" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "3. Run the installation script" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "## Configuration" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "Edit config.properties:" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "- log.level: Set logging level" >> $ARTIFACT_DIR/docs/manual.md;
+        echo "- app.name: Application name" >> $ARTIFACT_DIR/docs/manual.md;
+      fi
+    
+    - echo "Documentation generation completed!"
+    - echo "Generated documentation files:"
+    - ls -la $ARTIFACT_DIR/docs/
+    - echo "Total documentation size:"
+    - du -sh $ARTIFACT_DIR/docs/ 2>/dev/null || echo "du command not available"
+  artifacts:
+    name: "docs-$DYNAMIC_VERSION"
+    paths:
+      - $ARTIFACT_DIR/docs/
+    expire_in: 1 week
+    expose_as: "Documentation"
+
+# PACKAGE STAGE - Combining artifacts into deployable packages
+create_package:
+  stage: package
+  dependencies:
+    - build_application
+    - generate_documentation
+  variables:
+    PACKAGE_FORMAT: "tar.gz"
+    PACKAGE_NAME: "$APP_NAME-$DYNAMIC_VERSION"
+    INCLUDE_DOCS: "true"
+    INCLUDE_LOGS: "false"
+    COMPRESSION_LEVEL: "6"
+  script:
+    - echo "======================================"
+    - echo "     Package Creation"
+    - echo "======================================"
+    - echo "Package Configuration:"
+    - echo "  Name: $PACKAGE_NAME"
+    - echo "  Format: $PACKAGE_FORMAT"
+    - echo "  Include Docs: $INCLUDE_DOCS"
+    - echo "  Include Logs: $INCLUDE_LOGS"
+    - echo "  Compression Level: $COMPRESSION_LEVEL"
+    - echo ""
+    
+    # Verify artifacts are available
+    - echo "Verifying build artifacts..."
+    - if [ -d "$BUILD_DIR" ]; then
+        echo "✓ Build artifacts found:";
+        ls -la $BUILD_DIR/;
+      else
+        echo "✗ Build artifacts not found!";
+        exit 1;
+      fi
+    
+    - if [ "$INCLUDE_DOCS" = "true" ]; then
+        echo "Verifying documentation artifacts...";
+        if [ -d "$ARTIFACT_DIR/docs" ]; then
+          echo "✓ Documentation found:";
+          ls -la $ARTIFACT_DIR/docs/;
+        else
+          echo "✗ Documentation not found!";
+          exit 1;
+        fi;
+      fi
+    - echo ""
+    
+    # Create package structure
+    - echo "Creating package structure..."
+    - mkdir -p package/$PACKAGE_NAME/{bin,config,docs,logs}
+    
+    # Copy application files
+    - echo "Copying application files..."
+    - cp $BUILD_DIR/myapp package/$PACKAGE_NAME/bin/ 2>/dev/null || echo "No binary to copy"
+    - cp $BUILD_DIR/config.properties package/$PACKAGE_NAME/config/ 2>/dev/null || echo "No config to copy"
+    - cp $BUILD_DIR/app-info.txt package/$PACKAGE_NAME/ 2>/dev/null || echo "No app-info to copy"
+    
+    # Copy documentation if enabled
+    - if [ "$INCLUDE_DOCS" = "true" ]; then
+        echo "Copying documentation...";
+        cp -r $ARTIFACT_DIR/docs/* package/$PACKAGE_NAME/docs/ 2>/dev/null || echo "No docs to copy";
+      fi
+    
+    # Copy logs if enabled
+    - if [ "$INCLUDE_LOGS" = "true" ]; then
+        echo "Copying build logs...";
+        cp logs/*.log package/$PACKAGE_NAME/logs/ 2>/dev/null || echo "No logs to copy";
+      fi
+    
+    # Create package metadata
+    - echo "Creating package metadata..."
+    - echo "# Package Information" > package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Package: $PACKAGE_NAME" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "App: $APP_NAME" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Version: $APP_VERSION" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Dynamic Version: $DYNAMIC_VERSION" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Build Tag: $BUILD_TAG" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Format: $PACKAGE_FORMAT" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Created: $(date)" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Pipeline: $CI_PIPELINE_ID" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Job: $CI_JOB_ID" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Commit: $CI_COMMIT_SHA" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Branch: $CI_COMMIT_REF_NAME" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Includes Docs: $INCLUDE_DOCS" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    - echo "Includes Logs: $INCLUDE_LOGS" >> package/$PACKAGE_NAME/PACKAGE_INFO
+    
+    # Create installation script
+    - echo "Creating installation script..."
+    - echo "#!/bin/bash" > package/$PACKAGE_NAME/install.sh
+    - echo "echo 'Installing $APP_NAME v$DYNAMIC_VERSION'" >> package/$PACKAGE_NAME/install.sh
+    - echo "echo 'Package: $PACKAGE_NAME'" >> package/$PACKAGE_NAME/install.sh
+    - echo "echo 'Installation completed!'" >> package/$PACKAGE_NAME/install.sh
+    - chmod +x package/$PACKAGE_NAME/install.sh
+    
+    # Create the package archive
+    - echo "Creating package archive..."
+    - cd package
+    - tar -czf $PACKAGE_NAME.$PACKAGE_FORMAT $PACKAGE_NAME/
+    - cd ..
+    - mv package/$PACKAGE_NAME.$PACKAGE_FORMAT $ARTIFACT_DIR/
+    
+    - echo "Package created successfully!"
+    - echo "Package details:"
+    - ls -lh $ARTIFACT_DIR/$PACKAGE_NAME.$PACKAGE_FORMAT
+    - echo "Package contents:"
+    - tar -tzf $ARTIFACT_DIR/$PACKAGE_NAME.$PACKAGE_FORMAT | head -20
+  artifacts:
+    name: "package-$PACKAGE_NAME"
+    paths:
+      - $ARTIFACT_DIR/$PACKAGE_NAME.tar.gz
+      - package/$PACKAGE_NAME/PACKAGE_INFO
+    expire_in: 1 month
+    expose_as: "Deployment Package"
+
+# DEPLOY STAGE - Environment-specific deployments
+deploy_staging:
+  stage: deploy
+  dependencies:
+    - create_package
+  variables:
+    DEPLOY_ENV: "staging"
+    DEPLOY_URL: "$STAGING_URL"
+    DB_HOST: "staging-db.internal"
+    REDIS_HOST: "staging-redis.internal"
+    REPLICAS: "2"
+    HEALTH_CHECK_TIMEOUT: "60s"
+    DEPLOYMENT_STRATEGY: "rolling"
+  script:
+    - echo "======================================"
+    - echo "     Staging Deployment"
+    - echo "======================================"
+    - echo "Deployment Configuration:"
+    - echo "  Environment: $DEPLOY_ENV"
+    - echo "  URL: $DEPLOY_URL"
+    - echo "  Strategy: $DEPLOYMENT_STRATEGY"
+    - echo "  Replicas: $REPLICAS"
+    - echo "  Database: $DB_HOST"
+    - echo "  Redis: $REDIS_HOST"
+    - echo "  Health Check Timeout: $HEALTH_CHECK_TIMEOUT"
+    - echo ""
+    
+    # Verify package availability
+    - echo "Verifying deployment package..."
+    - PACKAGE_FILE="$ARTIFACT_DIR/$APP_NAME-$DYNAMIC_VERSION.tar.gz"
+    - if [ -f "$PACKAGE_FILE" ]; then
+        echo "✓ Package found: $PACKAGE_FILE";
+        echo "Package size: $(ls -lh $PACKAGE_FILE | awk '{print $5}')";
+      else
+        echo "✗ Package not found: $PACKAGE_FILE";
+        echo "Available files:";
+        ls -la $ARTIFACT_DIR/ || echo "Artifact directory not found!";
+        exit 1;
+      fi
+    - echo ""
+    
+    # Extract and verify package contents
+    - echo "Extracting package for verification..."
+    - cd $ARTIFACT_DIR
+    - tar -tzf $APP_NAME-$DYNAMIC_VERSION.tar.gz | head -10
+    - echo "..."
+    - echo "Total files in package: $(tar -tzf $APP_NAME-$DYNAMIC_VERSION.tar.gz | wc -l)"
+    - echo ""
+    
+    # Simulate deployment process
+    - echo "Starting deployment process..."
+    - echo "Step 1: Preparing deployment environment..."
+    - sleep 1
+    - echo "Step 2: Stopping existing services (if any)..."
+    - sleep 1
+    - echo "Step 3: Deploying new version..."
+    - sleep 2
+    - echo "Step 4: Updating configuration..."
+    - sleep 1
+    - echo "Step 5: Starting services..."
+    - sleep 2
+    - echo "Step 6: Running health checks..."
+    - sleep 2
+    - echo "✓ Deployment completed successfully!"
+    - echo ""
+    
+    # Create deployment report
+    - echo "Creating deployment report..."
+    - echo "# Deployment Report - $DEPLOY_ENV" > deployment-$DEPLOY_ENV.txt
+    - echo "" >> deployment-$DEPLOY_ENV.txt
+    - echo "## Application Information" >> deployment-$DEPLOY_ENV.txt
+    - echo "- App: $APP_NAME" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Version: $APP_VERSION" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Dynamic Version: $DYNAMIC_VERSION" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Build Tag: $BUILD_TAG" >> deployment-$DEPLOY_ENV.txt
+    - echo "" >> deployment-$DEPLOY_ENV.txt
+    - echo "## Deployment Details" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Environment: $DEPLOY_ENV" >> deployment-$DEPLOY_ENV.txt
+    - echo "- URL: $DEPLOY_URL" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Strategy: $DEPLOYMENT_STRATEGY" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Replicas: $REPLICAS" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Database: $DB_HOST" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Redis: $REDIS_HOST" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Deployed: $(date)" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Pipeline: $CI_PIPELINE_ID" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Job: $CI_JOB_ID" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Commit: $CI_COMMIT_SHA" >> deployment-$DEPLOY_ENV.txt
+    - echo "- Branch: $CI_COMMIT_REF_NAME" >> deployment-$DEPLOY_ENV.txt
+    
+    - echo "📋 Deployment Summary:"
+    - echo "   ✓ $APP_NAME v$DYNAMIC_VERSION deployed to $DEPLOY_ENV"
+    - echo "   ✓ Available at: $DEPLOY_URL"
+    - echo "   ✓ Strategy: $DEPLOYMENT_STRATEGY with $REPLICAS replicas"
+    - echo "   ✓ Pipeline: $CI_PIPELINE_ID"
+    - echo "   ✓ Commit: $CI_COMMIT_SHORT_SHA"
+  environment:
+    name: staging
+    url: $STAGING_URL
+    deployment_tier: staging
+  artifacts:
+    name: "deployment-staging-$DYNAMIC_VERSION"
+    paths:
+      - $ARTIFACT_DIR/deployment-staging.txt
+    expire_in: 3 days
+    expose_as: "Staging Deployment Report"
+  when: on_success
+
+# Manual production deployment with enhanced security
+deploy_production:
+  stage: deploy
+  dependencies:
+    - create_package
+  variables:
+    DEPLOY_ENV: "production"
+    DEPLOY_URL: "$PROD_URL"
+    DB_HOST: "prod-db.internal"
+    REDIS_HOST: "prod-redis.internal"
+    REPLICAS: "5"
+    HEALTH_CHECK_TIMEOUT: "120s"
+    DEPLOYMENT_STRATEGY: "blue-green"
+    ROLLBACK_ENABLED: "true"
+    MONITORING_ENABLED: "true"
+  script:
+    - echo "======================================"
+    - echo "   🚀 PRODUCTION DEPLOYMENT 🚀"
+    - echo "======================================"
+    - echo "⚠️  CRITICAL: Production Environment"
+    - echo "This deployment will affect live users!"
+    - echo ""
+    - echo "Deployment Configuration:"
+    - echo "  Environment: $DEPLOY_ENV"
+    - echo "  URL: $DEPLOY_URL"
+    - echo "  Strategy: $DEPLOYMENT_STRATEGY"
+    - echo "  Replicas: $REPLICAS"
+    - echo "  Database: $DB_HOST"
+    - echo "  Redis: $REDIS_HOST"
+    - echo "  Health Check Timeout: $HEALTH_CHECK_TIMEOUT"
+    - echo "  Rollback Enabled: $ROLLBACK_ENABLED"
+    - echo "  Monitoring Enabled: $MONITORING_ENABLED"
+    - echo ""
+    
+    # Enhanced pre-deployment validation for production
+    - echo "Running enhanced pre-deployment validation..."
+    - echo "✓ Validating package integrity..."
+    - sleep 1
+    - echo "✓ Checking database connectivity..."
+    - sleep 1
+    - echo "✓ Verifying external service dependencies..."
+    - sleep 1
+    - echo "✓ Validating SSL certificates..."
+    - sleep 1
+    - echo "✓ Checking resource availability..."
+    - sleep 1
+    - echo "✓ Pre-deployment validation completed"
+    - echo ""
+    
+    # Production deployment process
+    - echo "Initiating production deployment..."
+    - echo "Using $DEPLOYMENT_STRATEGY deployment strategy"
+    - echo "Step 1: Creating blue-green environment..."
+    - sleep 2
+    - echo "Step 2: Deploying to green environment..."
+    - sleep 3
+    - echo "Step 3: Running comprehensive health checks..."
+    - sleep 3
+    - echo "Step 4: Validating application functionality..."
+    - sleep 2
+    - echo "Step 5: Switching traffic to green environment..."
+    - sleep 2
+    - echo "Step 6: Monitoring deployment metrics..."
+    - sleep 2
+    - echo "✓ Production deployment completed successfully!"
+    - echo ""
+    
+    # Post-deployment verification
+    - echo "Running post-deployment verification..."
+    - echo "✓ Application health check: PASSED"
+    - echo "✓ Database connectivity: PASSED"
+    - echo "✓ External API availability: PASSED"
+    - echo "✓ SSL certificate validation: PASSED"
+    - echo "✓ Performance metrics: WITHIN LIMITS"
+    - echo "✓ Error rate monitoring: NORMAL"
+    - echo "✓ Post-deployment verification completed"
+    - echo ""
+    
+    # Create comprehensive production deployment report
+    - echo "Creating production deployment report..."
+    - echo "# PRODUCTION DEPLOYMENT REPORT" > deployment-$DEPLOY_ENV.txt
+    - echo "" >> deployment-$DEPLOY_ENV.txt
+    - echo "⚠️ **PRODUCTION ENVIRONMENT**" >> deployment-$DEPLOY_ENV.txt
+    - echo "" >> deployment-$DEPLOY_ENV.txt
+    - echo "## Application Information" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **App**: $APP_NAME" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Version**: $APP_VERSION" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Dynamic Version**: $DYNAMIC_VERSION" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Build Tag**: $BUILD_TAG" >> deployment-$DEPLOY_ENV.txt
+    - echo "" >> deployment-$DEPLOY_ENV.txt
+    - echo "## Deployment Configuration" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Environment**: $DEPLOY_ENV" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **URL**: $DEPLOY_URL" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Strategy**: $DEPLOYMENT_STRATEGY" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Replicas**: $REPLICAS" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Database**: $DB_HOST" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Redis**: $REDIS_HOST" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Health Check Timeout**: $HEALTH_CHECK_TIMEOUT" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Rollback Enabled**: $ROLLBACK_ENABLED" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Monitoring Enabled**: $MONITORING_ENABLED" >> deployment-$DEPLOY_ENV.txt
+    - echo "" >> deployment-$DEPLOY_ENV.txt
+    - echo "## Deployment Timeline" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Started**: $(date)" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Pipeline**: $CI_PIPELINE_ID" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Job**: $CI_JOB_ID" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Commit**: $CI_COMMIT_SHA" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Branch**: $CI_COMMIT_REF_NAME" >> deployment-$DEPLOY_ENV.txt
+    - echo "- **Deployed By**: $GITLAB_USER_NAME ($GITLAB_USER_EMAIL)" >> deployment-$DEPLOY_ENV.txt
+    - echo "" >> deployment-$DEPLOY_ENV.txt
+    - echo "## Validation Results" >> deployment-$DEPLOY_ENV.txt
+    - echo "- ✅ Pre-deployment validation: PASSED" >> deployment-$DEPLOY_ENV.txt
+    - echo "- ✅ Deployment process: COMPLETED" >> deployment-$DEPLOY_ENV.txt
+    - echo "- ✅ Post-deployment verification: PASSED" >> deployment-$DEPLOY_ENV.txt
+    
+    - echo ""
+    - echo "🎉 PRODUCTION DEPLOYMENT SUCCESSFUL! 🎉"
+    - echo "📋 Summary:"
+    - echo "   ✅ $APP_NAME v$DYNAMIC_VERSION is live in production"
+    - echo "   🌐 Available at: $DEPLOY_URL"
+    - echo "   🔄 Strategy: $DEPLOYMENT_STRATEGY with $REPLICAS replicas"
+    - echo "   📊 Pipeline: $CI_PIPELINE_ID"
+    - echo "   🔗 Commit: $CI_COMMIT_SHORT_SHA ($CI_COMMIT_REF_NAME)"
+    - echo "   👤 Deployed by: $GITLAB_USER_NAME"
+  environment:
+    name: production
+    url: $PROD_URL
+    deployment_tier: production
+  artifacts:
+    name: "deployment-production-$DYNAMIC_VERSION"
+    paths:
+      - $ARTIFACT_DIR/deployment-production.txt
+    expire_in: 6 months
+    expose_as: "Production Deployment Report"
+  when: manual
+  allow_failure: false
+  only:
+    - main
+    - master
+  except:
+    variables:
+      - $CI_COMMIT_MESSAGE =~ /\[skip production\]/

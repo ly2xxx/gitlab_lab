@@ -1,0 +1,184 @@
+# Lab 2: Stages and Jobs Example
+# This pipeline demonstrates stage organization and job dependencies
+
+# Define the stages in execution order
+stages:
+  - prepare
+  - build
+  - test
+  - deploy
+
+variables:
+  APP_NAME: "GitLab CI/CD Tutorial App"
+  BUILD_DIR: "build"
+
+# PREPARE STAGE - Setup and validation
+setup_environment:
+  stage: prepare
+  script:
+    - echo "=== Setting up build environment ==="
+    - echo "App: $APP_NAME"
+    - echo "Build directory: $BUILD_DIR"
+    - echo "Creating directories..."
+    - mkdir -p $BUILD_DIR artifacts logs
+    - echo "Directories created:"
+    - ls -la
+    - echo "Environment setup complete!"
+
+check_dependencies:
+  stage: prepare
+  script:
+    - echo "=== Checking system dependencies ==="
+    - echo "Git version: $(git --version)"
+    - echo "Available disk space:"
+    - df -h 2>/dev/null || echo "df command not available"
+    - echo "Memory info:"
+    - free -h 2>/dev/null || echo "free command not available"
+    - echo "Dependencies check complete!"
+
+# BUILD STAGE - Compilation and asset generation
+compile_app:
+  stage: build
+  script:
+    - echo "=== Compiling application ==="
+    - echo "Build started at: $(date)"
+    - echo "Simulating compilation process..."
+    - sleep 3  # Simulate build time
+    - echo "Creating build artifacts..."
+    - echo "App: $APP_NAME" > $BUILD_DIR/app.txt
+    - echo "Version: 1.0.0" >> $BUILD_DIR/app.txt
+    - echo "Build Date: $(date)" >> $BUILD_DIR/app.txt
+    - echo "Build complete!" >> $BUILD_DIR/app.txt
+    - echo "Build finished at: $(date)"
+    - echo "Artifacts created:"
+    - ls -la $BUILD_DIR/
+  artifacts:
+    name: "app-build-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - $BUILD_DIR/
+    expire_in: 1 hour
+    reports:
+      # This would be useful for actual build reports
+    when: always
+
+build_documentation:
+  stage: build
+  script:
+    - echo "=== Building documentation ==="
+    - echo "Generating documentation..."
+    - sleep 2  # Simulate doc generation
+    - mkdir -p $BUILD_DIR/docs
+    - echo "# $APP_NAME Documentation" > $BUILD_DIR/docs/README.md
+    - echo "" >> $BUILD_DIR/docs/README.md
+    - echo "## Overview" >> $BUILD_DIR/docs/README.md
+    - echo "This is the documentation for $APP_NAME." >> $BUILD_DIR/docs/README.md
+    - echo "" >> $BUILD_DIR/docs/README.md
+    - echo "Generated on: $(date)" >> $BUILD_DIR/docs/README.md
+    - echo "Pipeline: $CI_PIPELINE_ID" >> $BUILD_DIR/docs/README.md
+    - echo "Documentation build complete!"
+    - echo "Documentation files:"
+    - ls -la $BUILD_DIR/docs/
+  artifacts:
+    name: "docs-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - $BUILD_DIR/docs/
+    expire_in: 1 hour
+
+# TEST STAGE - Various testing approaches
+unit_tests:
+  stage: test
+  dependencies:
+    - compile_app
+  script:
+    - echo "=== Running unit tests ==="
+    - echo "Testing build artifact availability..."
+    - if [ -f "$BUILD_DIR/app.txt" ]; then
+        echo "✓ Build artifact found"
+        echo "Content:"
+        cat $BUILD_DIR/app.txt
+      else
+        echo "✗ Build artifact not found!"
+        exit 1
+      fi
+    - echo "Running simulated unit tests..."
+    - sleep 2
+    - echo "✓ All unit tests passed!"
+
+integration_tests:
+  stage: test
+  dependencies:
+    - compile_app
+  script:
+    - echo "=== Running integration tests ==="
+    - echo "Testing application integration..."
+    - echo "Checking build artifact..."
+    - cat $BUILD_DIR/app.txt
+    - echo "Simulating integration test suite..."
+    - sleep 4  # Simulate test execution
+    - echo "✓ Integration tests completed successfully!"
+
+code_quality:
+  stage: test
+  script:
+    - echo "=== Running code quality checks ==="
+    - echo "Running linting..."
+    - sleep 1
+    - echo "✓ Linting passed"
+    - echo "Running security scan..."
+    - sleep 2
+    - echo "✓ Security scan passed"
+    - echo "Running complexity analysis..."
+    - sleep 1
+    - echo "✓ Code complexity within limits"
+    - echo "✓ All code quality checks passed!"
+  allow_failure: false
+
+# DEPLOY STAGE - Deployment to environments
+deploy_staging:
+  stage: deploy
+  dependencies:
+    - compile_app
+    - build_documentation
+  script:
+    - echo "=== Deploying to staging environment ==="
+    - echo "Preparing deployment package..."
+    - echo "Available artifacts:"
+    - ls -la $BUILD_DIR/
+    - echo "App info:"
+    - cat $BUILD_DIR/app.txt
+    - echo "Documentation available:"
+    - ls -la $BUILD_DIR/docs/ 2>/dev/null || echo "No docs found"
+    - echo "Simulating deployment process..."
+    - sleep 3
+    - echo "✓ Application deployed successfully to staging!"
+    - echo "📋 Deployment Summary:"
+    - echo "   Environment: Staging"
+    - echo "   URL: https://staging.example.com"
+    - echo "   Version: 1.0.0"
+    - echo "   Pipeline: $CI_PIPELINE_ID"
+    - echo "   Commit: $CI_COMMIT_SHORT_SHA"
+  environment:
+    name: staging
+    url: https://staging.example.com
+  when: on_success
+
+# Optional: Manual deploy to production (not run automatically)
+deploy_production:
+  stage: deploy
+  dependencies:
+    - compile_app
+    - build_documentation
+  script:
+    - echo "=== Deploying to production environment ==="
+    - echo "🚀 PRODUCTION DEPLOYMENT"
+    - echo "This would deploy to production"
+    - echo "Available artifacts:"
+    - ls -la $BUILD_DIR/
+    - echo "Production deployment completed!"
+  environment:
+    name: production
+    url: https://production.example.com
+  when: manual
+  only:
+    - main
+    - master
