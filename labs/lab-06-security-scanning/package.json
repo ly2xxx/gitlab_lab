@@ -1,0 +1,28 @@
+{
+  "name": "gitlab-security-lab",
+  "version": "1.0.0",
+  "description": "Enterprise security scanning for GitLab CI/CD",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "test": "jest",
+    "lint": "eslint src/ --ext .js",
+    "lint:security": "eslint src/ --ext .js --format json --output-file eslint-security.json",
+    "security:audit": "npm audit --audit-level moderate",
+    "security:snyk": "snyk test",
+    "security:all": "npm run security:audit && npm run lint:security",
+    "compliance:check": "python scripts/generate-compliance-report.py"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "helmet": "^7.0.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "eslint": "^8.44.0",
+    "eslint-plugin-security": "^1.7.1",
+    "jest": "^29.6.1",
+    "nodemon": "^3.0.1"
+  }
+}

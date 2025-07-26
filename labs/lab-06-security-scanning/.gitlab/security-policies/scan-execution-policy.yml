@@ -1,0 +1,18 @@
+type: scan_execution_policy
+name: "Comprehensive Security Scanning"
+description: "Enforce security scanning on all commits"
+enabled: true
+rules:
+  - type: pipeline
+    branches:
+      - main
+      - develop
+      - release/*
+actions:
+  - scan: sast
+  - scan: dependency_scanning
+  - scan: container_scanning
+  - scan: secret_detection
+  - scan: dast
+    scanner_profile: "Full Scan"
+    site_profile: "Production"
