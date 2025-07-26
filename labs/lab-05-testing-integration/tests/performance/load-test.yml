@@ -1,0 +1,39 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 10
+      name: "Sustained load"
+    - duration: 60
+      arrivalRate: 20
+      name: "Spike test"
+  processor: "./performance-processor.js"
+
+scenarios:
+  - name: "Health check load"
+    weight: 30
+    flow:
+      - get:
+          url: "/health"
+          expect:
+            - statusCode: 200
+            - hasProperty: "status"
+
+  - name: "User API load"
+    weight: 70
+    flow:
+      - get:
+          url: "/api/users"
+          expect:
+            - statusCode: 200
+      - think: 2
+      - post:
+          url: "/api/users"
+          json:
+            name: "Load Test User {{ $randomString() }}"
+            email: "load-{{ $randomString() }}@test.com"
+          expect:
+            - statusCode: 201

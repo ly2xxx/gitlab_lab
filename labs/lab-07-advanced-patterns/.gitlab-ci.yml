@@ -1,0 +1,171 @@
+# Main orchestration pipeline (.gitlab-ci.yml)
+include:
+  - local: '.gitlab/pipelines/variables.yml'
+  - local: '.gitlab/pipelines/rules.yml'
+
+variables:
+  MICROSERVICES: "frontend,backend,api-gateway,user-service,notification-service"
+  DEPLOY_ENVIRONMENT: "${CI_COMMIT_REF_SLUG}"
+
+stages:
+  - validate
+  - discover
+  - build
+  - test
+  - security
+  - package
+  - deploy
+  - verify
+
+# Service discovery and dependency mapping
+discover-services:
+  stage: discover
+  image: alpine:latest
+  script:
+    - apk add --no-cache jq git
+    - |
+      # Discover changed services based on file paths
+      CHANGED_FILES=$(git diff --name-only $CI_COMMIT_BEFORE_SHA $CI_COMMIT_SHA)
+      CHANGED_SERVICES=""
+      
+      for service in $(echo $MICROSERVICES | tr ',' ' '); do
+        if echo "$CHANGED_FILES" | grep -q "services/$service/"; then
+          CHANGED_SERVICES="$CHANGED_SERVICES $service"
+        fi
+      done
+      
+      # Generate service dependency matrix
+      cat > services-matrix.json << EOF
+      {
+        "changed_services": "$(echo $CHANGED_SERVICES | xargs)",
+        "all_services": "$MICROSERVICES",
+        "dependencies": {
+          "frontend": ["api-gateway"],
+          "backend": ["user-service", "notification-service"],
+          "api-gateway": ["user-service"],
+          "user-service": [],
+          "notification-service": ["user-service"]
+        },
+        "build_order": ["user-service", "notification-service", "api-gateway", "backend", "frontend"]
+      }
+      EOF
+      
+      echo "Service discovery completed:"
+      cat services-matrix.json
+  artifacts:
+    paths:
+      - services-matrix.json
+    expire_in: 1 hour
+
+# Dynamic pipeline generation based on service changes
+generate-build-pipelines:
+  stage: build
+  image: python:3.9
+  script:
+    - pip install jinja2 pyyaml
+    - python scripts/generate-service-pipelines.py
+  artifacts:
+    paths:
+      - generated-pipelines/
+    expire_in: 1 hour
+  dependencies:
+    - discover-services
+
+# Trigger service-specific child pipelines
+trigger-service-builds:
+  stage: build
+  trigger:
+    include:
+      - artifact: generated-pipelines/build-pipeline.yml
+        job: generate-build-pipelines
+    strategy: depend
+  dependencies:
+    - generate-build-pipelines
+
+# Integration testing across services
+integration-test-orchestrator:
+  stage: test
+  trigger:
+    include:
+      - local: '.gitlab/pipelines/integration-tests.yml'
+    strategy: depend
+  variables:
+    SERVICES_MATRIX: services-matrix.json
+  dependencies:
+    - trigger-service-builds
+
+# Security scanning orchestrator
+security-scan-orchestrator:
+  stage: security
+  trigger:
+    include:
+      - local: '.gitlab/pipelines/security-scanning.yml'
+    strategy: depend
+  dependencies:
+    - integration-test-orchestrator
+
+# Deployment orchestrator with dependency management
+deploy-orchestrator:
+  stage: deploy
+  trigger:
+    include:
+      - local: '.gitlab/pipelines/deployment.yml'
+    strategy: depend
+  variables:
+    DEPLOY_STRATEGY: "rolling"
+    ENVIRONMENT: "$DEPLOY_ENVIRONMENT"
+  dependencies:
+    - security-scan-orchestrator
+  environment:
+    name: $DEPLOY_ENVIRONMENT
+    url: https://$DEPLOY_ENVIRONMENT.yourdomain.com
+
+# Cross-project pipeline coordination
+trigger-downstream-projects:
+  stage: deploy
+  parallel:
+    matrix:
+      - PROJECT: "infrastructure/terraform"
+        ACTION: "apply"
+      - PROJECT: "monitoring/observability"
+        ACTION: "deploy"
+      - PROJECT: "documentation/api-docs"
+        ACTION: "update"
+  trigger:
+    project: $PROJECT
+    branch: main
+    strategy: depend
+  variables:
+    PARENT_PIPELINE_ID: $CI_PIPELINE_ID
+    UPSTREAM_COMMIT: $CI_COMMIT_SHA
+    ACTION: $ACTION
+  dependencies:
+    - deploy-orchestrator
+  only:
+    - main
+
+# Pipeline verification and monitoring
+verify-deployment:
+  stage: verify
+  image: curlimages/curl:latest
+  script:
+    - |
+      # Verify all services are healthy
+      services="frontend api-gateway user-service notification-service"
+      
+      for service in $services; do
+        echo "Verifying $service health..."
+        if curl -f "https://$DEPLOY_ENVIRONMENT.yourdomain.com/$service/health"; then
+          echo "✅ $service is healthy"
+        else
+          echo "❌ $service health check failed"
+          exit 1
+        fi
+      done
+      
+      echo "🎉 All services verified successfully"
+  dependencies:
+    - deploy-orchestrator
+  environment:
+    name: $DEPLOY_ENVIRONMENT
+    url: https://$DEPLOY_ENVIRONMENT.yourdomain.com

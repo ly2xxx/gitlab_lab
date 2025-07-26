@@ -1,0 +1,165 @@
+# .gitlab/pipelines/integration-tests.yml
+variables:
+  COMPOSE_PROJECT_NAME: "integration-test-$CI_PIPELINE_ID"
+  TEST_TIMEOUT: "300"
+
+stages:
+  - setup
+  - test-preparation
+  - smoke-tests
+  - integration-tests
+  - e2e-tests
+  - cleanup
+
+setup-test-environment:
+  stage: setup
+  image: docker/compose:latest
+  services:
+    - docker:dind
+  script:
+    - |
+      # Generate dynamic docker-compose for integration testing
+      cat > docker-compose.integration.yml << EOF
+      version: '3.8'
+      services:
+        frontend:
+          image: $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
+          ports:
+            - "3000:3000"
+          environment:
+            - API_URL=http://api-gateway:8080
+          depends_on:
+            - api-gateway
+        
+        api-gateway:
+          image: $CI_REGISTRY_IMAGE/api-gateway:$CI_COMMIT_SHA
+          ports:
+            - "8080:8080"
+          environment:
+            - USER_SERVICE_URL=http://user-service:8081
+            - NOTIFICATION_SERVICE_URL=http://notification-service:8082
+          depends_on:
+            - user-service
+            - notification-service
+        
+        user-service:
+          image: $CI_REGISTRY_IMAGE/user-service:$CI_COMMIT_SHA
+          ports:
+            - "8081:8081"
+          environment:
+            - DATABASE_URL=postgresql://user:pass@postgres:5432/userdb
+          depends_on:
+            - postgres
+            - redis
+        
+        notification-service:
+          image: $CI_REGISTRY_IMAGE/notification-service:$CI_COMMIT_SHA
+          ports:
+            - "8082:8082"
+          environment:
+            - REDIS_URL=redis://redis:6379
+            - EMAIL_SERVICE_URL=http://email-mock:8083
+          depends_on:
+            - redis
+            - email-mock
+        
+        postgres:
+          image: postgres:15
+          environment:
+            - POSTGRES_DB=userdb
+            - POSTGRES_USER=user
+            - POSTGRES_PASSWORD=pass
+        
+        redis:
+          image: redis:7-alpine
+        
+        email-mock:
+          image: mailhog/mailhog:latest
+          ports:
+            - "8083:8025"
+      
+      networks:
+        default:
+          name: integration-network-$CI_PIPELINE_ID
+      EOF
+    
+    - docker-compose -f docker-compose.integration.yml pull
+    - docker-compose -f docker-compose.integration.yml up -d
+    - sleep 30  # Wait for services to be ready
+  artifacts:
+    paths:
+      - docker-compose.integration.yml
+    expire_in: 1 hour
+
+service-health-checks:
+  stage: test-preparation
+  image: curlimages/curl:latest
+  script:
+    - |
+      # Wait for all services to be healthy
+      services="frontend:3000 api-gateway:8080 user-service:8081 notification-service:8082"
+      
+      for service in $services; do
+        service_name=$(echo $service | cut -d: -f1)
+        port=$(echo $service | cut -d: -f2)
+        
+        echo "Checking health of $service_name on port $port"
+        timeout $TEST_TIMEOUT sh -c "
+          until curl -f http://$service_name:$port/health; do
+            echo 'Waiting for $service_name...'
+            sleep 5
+          done
+        "
+        echo "$service_name is healthy"
+      done
+  dependencies:
+    - setup-test-environment
+
+cross-service-integration-tests:
+  stage: integration-tests
+  image: node:18
+  script:
+    - npm install -g newman
+    - |
+      # Run comprehensive API tests across all services
+      newman run tests/postman/integration-collection.json \
+        --environment tests/postman/integration-environment.json \
+        --reporters cli,json \
+        --reporter-json-export integration-test-results.json
+      
+      # Custom integration tests
+      npm install axios jest
+      npm run test:integration:cross-service
+  artifacts:
+    reports:
+      junit: integration-test-results.xml
+    paths:
+      - integration-test-results.json
+    when: always
+  dependencies:
+    - service-health-checks
+
+performance-integration-tests:
+  stage: integration-tests
+  image: loadimpact/k6:latest
+  script:
+    - |
+      # Load test the integrated system
+      k6 run --out json=performance-results.json tests/k6/integration-load-test.js
+  artifacts:
+    paths:
+      - performance-results.json
+  dependencies:
+    - service-health-checks
+
+cleanup-test-environment:
+  stage: cleanup
+  image: docker/compose:latest
+  services:
+    - docker:dind
+  script:
+    - docker-compose -f docker-compose.integration.yml down -v
+    - docker network rm integration-network-$CI_PIPELINE_ID || true
+  dependencies:
+    - setup-test-environment
+  when: always

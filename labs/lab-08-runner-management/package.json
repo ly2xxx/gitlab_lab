@@ -1,0 +1,31 @@
+{
+  "name": "gitlab-runner-management-lab",
+  "version": "1.0.0",
+  "description": "Enterprise GitLab Runner management and optimization",
+  "scripts": {
+    "setup:runners": "sudo bash scripts/setup-enterprise-runners.sh",
+    "setup:autoscaling": "bash scripts/setup-autoscaling-runners.sh",
+    "setup:monitoring": "bash scripts/monitoring-setup.sh",
+    "maintenance": "bash scripts/runner-maintenance.sh",
+    "health:check": "bash scripts/runner-maintenance.sh health",
+    "health:report": "bash scripts/runner-maintenance.sh report",
+    "optimize": "bash scripts/runner-maintenance.sh optimize",
+    "cleanup": "bash scripts/runner-maintenance.sh cleanup",
+    "update:runners": "bash scripts/runner-maintenance.sh update",
+    "deploy:k8s": "kubectl apply -f kubernetes/",
+    "deploy:terraform": "cd terraform && terraform apply",
+    "test:pipeline": "echo 'Test pipeline using specialized runners'"
+  },
+  "keywords": [
+    "gitlab",
+    "ci-cd",
+    "runners",
+    "infrastructure",
+    "devops",
+    "enterprise",
+    "monitoring",
+    "optimization"
+  ],
+  "author": "GitLab Lab Tutorial",
+  "license": "MIT"
+}

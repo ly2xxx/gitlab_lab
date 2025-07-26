@@ -1,0 +1,38 @@
+# docker/Dockerfile.development
+FROM node:18-alpine
+
+# Install development tools
+RUN apk add --no-cache \
+    git \
+    curl \
+    && rm -rf /var/cache/apk/*
+
+# Set working directory
+WORKDIR /app
+
+# Install nodemon globally for development
+RUN npm install -g nodemon
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies)
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Add labels
+LABEL maintainer="GitLab Lab Tutorial"
+LABEL version="1.0.0-dev"
+LABEL description="Development Node.js application with hot reloading"
+
+# Expose port
+EXPOSE 3000
+
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+# Use nodemon for hot reloading
+CMD ["npm", "run", "dev"]

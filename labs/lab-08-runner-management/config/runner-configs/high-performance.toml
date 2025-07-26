@@ -1,0 +1,87 @@
+# High-performance runner configuration
+# /etc/gitlab-runner/config-high-performance.toml
+
+concurrent = 5
+check_interval = 0
+log_level = "info"
+log_format = "json"
+
+[session_server]
+  session_timeout = 1800
+
+[[runners]]
+  name = "high-performance-runner"
+  url = "https://gitlab.com/"
+  token = "YOUR_RUNNER_TOKEN"
+  executor = "docker"
+  limit = 5
+  
+  [runners.custom_build_dir]
+    enabled = true
+  
+  [runners.cache]
+    Type = "s3"
+    Shared = true
+    [runners.cache.s3]
+      ServerAddress = "s3.amazonaws.com"
+      BucketName = "gitlab-runner-cache-hpc"
+      BucketLocation = "us-east-1"
+      Insecure = false
+  
+  [runners.docker]
+    tls_verify = false
+    image = "alpine:latest"
+    privileged = true
+    disable_entrypoint_overwrite = false
+    oom_kill_disable = false
+    disable_cache = false
+    
+    # High-performance resource allocation
+    memory = "16g"
+    memory_swap = "16g"
+    cpus = "8.0"
+    
+    # Optimized volumes
+    volumes = [
+      "/var/run/docker.sock:/var/run/docker.sock",
+      "/cache",
+      "/builds:/builds",
+      "/dev/shm:/dev/shm"  # Shared memory for performance
+    ]
+    
+    # Large shared memory for compilation
+    shm_size = 8589934592  # 8GB
+    
+    # Network optimizations
+    network_mode = "bridge"
+    dns = ["1.1.1.1", "8.8.8.8"]
+    
+    # Performance-oriented pull policy
+    pull_policy = "if-not-present"
+    
+    # Security options for performance
+    security_opt = ["apparmor:unconfined", "seccomp:unconfined"]
+    
+    # Environment variables for optimization
+    environment = [
+      "DOCKER_DRIVER=overlay2",
+      "DOCKER_TLS_CERTDIR=/certs",
+      "BUILDKIT_PROGRESS=plain",
+      "DOCKER_BUILDKIT=1",
+      "COMPOSE_DOCKER_CLI_BUILD=1"
+    ]
+    
+    # Service limits for dependent services
+    [runners.docker.services_limits]
+      memory = "2g"
+      cpus = "1.0"
+      
+  # Tags for job targeting
+  tags = [
+    "high-performance",
+    "cpu-intensive",
+    "large-memory",
+    "compilation",
+    "docker",
+    "linux"
+  ]

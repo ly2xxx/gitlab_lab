@@ -1,0 +1,22 @@
+type: scan_result_policy
+name: "Security Vulnerability Policy"
+description: "Block deployments with critical vulnerabilities"
+enabled: true
+rules:
+  - type: scan_finding
+    branches:
+      - main
+    scanners:
+      - sast
+      - dependency_scanning
+      - container_scanning
+    vulnerabilities_allowed: 0
+    severity_levels:
+      - critical
+    vulnerability_states:
+      - newly_detected
+actions:
+  - type: require_approval
+    approvers_ids:
+      - 123  # Security team member ID
+    approvals_required: 1
