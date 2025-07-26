@@ -1,0 +1,31 @@
+{
+  "name": "gitlab-docker-demo",
+  "version": "1.0.0",
+  "description": "Demo Node.js application for GitLab Docker integration lab",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "echo \"Running tests...\" && node test.js",
+    "lint": "echo \"Linting code...\" && exit 0"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "docker",
+    "gitlab",
+    "ci/cd"
+  ],
+  "author": "GitLab Tutorial",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}

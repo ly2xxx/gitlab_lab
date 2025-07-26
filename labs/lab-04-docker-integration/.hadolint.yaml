@@ -1,0 +1,47 @@
+# Hadolint configuration for Dockerfile linting
+# This file configures the hadolint tool to check Dockerfile best practices
+
+# Rules to ignore (can be customized based on your requirements)
+ignored:
+  # DL3008: Pin versions in apt get install
+  - DL3008
+  # DL3009: Delete the apt-get lists after installing something
+  - DL3009
+  # DL3015: Avoid additional packages by specifying --no-install-recommends
+  - DL3015
+  # DL4006: Set the SHELL option -o pipefail before RUN with a pipe in it
+  - DL4006
+
+# Trusted registries (optional)
+trustedRegistries:
+  - docker.io
+  - registry.gitlab.com
+  - gcr.io
+  - quay.io
+
+# Rules to treat as warnings instead of errors
+warnings:
+  - DL3059  # Multiple consecutive RUN instructions
+  - DL3060  # `yarn cache clean` missing after `yarn install`
+
+# Rules to treat as errors (highest severity)
+errors:
+  - DL3001  # For some bash commands it makes no sense running them in a Docker container
+  - DL3002  # Last user should not be root
+  - DL3003  # Use WORKDIR to switch to a directory
+  - DL3004  # Do not use sudo as it leads to unpredictable behavior
+  - DL3007  # Using latest is prone to errors
+  - DL3020  # Use COPY instead of ADD for files and folders
+  - DL3025  # Use arguments JSON notation for CMD and ENTRYPOINT arguments
+
+# Rules to completely disable
+disabled:
+  # Add any rules you want to completely disable here
+  # Example: - DL3000
+
+# Override specific rules for certain files
+override:
+  error: []
+  warning: []
+  info: []
+  style: []
