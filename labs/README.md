@@ -13,6 +13,13 @@ Each lab builds upon previous concepts and includes:
 
 ## 🗺️ Learning Path
 
+### 🏠 **Foundation Path** (Setup)
+
+**[Lab 0: GitLab Self-Hosting](./lab-00-gitlab-self-host-docker/)**
+- Duration: ~60 minutes
+- Learn: Docker deployment, GitLab CE setup, runner configuration
+- Outcome: Your own local GitLab environment ready for hands-on learning
+
 ### 🌱 **Beginner Path** (Foundation)
 
 **[Lab 1: Basic Pipeline Setup](./lab-01-basic-pipeline/)**
@@ -58,11 +65,13 @@ Each lab builds upon previous concepts and includes:
 
 ### 1. Choose Your Starting Point
 
-**New to CI/CD?** Start with Lab 1 and progress sequentially.
+**New to CI/CD?** Start with Lab 0 for local GitLab setup, then continue with Lab 1 and progress sequentially.
 
-**Some CI/CD experience?** Review Labs 1-2 quickly, then focus on Labs 3-6.
+**Want hands-on learning?** Use Lab 0 to set up your own GitLab environment for unlimited practice.
 
-**Advanced user?** Jump to Labs 6-7 for advanced patterns and optimizations.
+**Some CI/CD experience?** Lab 0 is optional. Review Labs 1-2 quickly, then focus on Labs 3-6.
+
+**Advanced user?** Use Lab 0 for enterprise-like setups, then jump to Labs 6-7 for advanced patterns.
 
 ### 2. Lab Setup Pattern
 
@@ -111,19 +120,22 @@ lab-XX-topic-name/
 
 ### Core Concepts Covered
 
-| Concept | Lab 1 | Lab 2 | Lab 3 | Lab 4 | Lab 5 | Lab 6 | Lab 7 |
-|---------|-------|-------|-------|-------|-------|-------|-------|
-| **Basic Pipeline** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| **Stages & Jobs** |   | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| **Variables** |   |   | ✓ | ✓ | ✓ | ✓ | ✓ |
-| **Artifacts** |   |   | ✓ | ✓ | ✓ | ✓ | ✓ |
-| **Docker Integration** |   |   |   | ✓ | ✓ | ✓ | ✓ |
-| **Testing** |   |   |   |   | ✓ | ✓ | ✓ |
-| **Security** |   |   |   |   |   | ✓ | ✓ |
-| **Advanced Patterns** |   |   |   |   |   |   | ✓ |
+| Concept | Lab 0 | Lab 1 | Lab 2 | Lab 3 | Lab 4 | Lab 5 | Lab 6 | Lab 7 |
+|---------|-------|-------|-------|-------|-------|-------|-------|-------|
+| **GitLab Setup** | ✓ |   |   |   |   |   |   |   |
+| **Runner Config** | ✓ |   |   |   |   |   |   |   |
+| **Basic Pipeline** |   | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Stages & Jobs** |   |   | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Variables** |   |   |   | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Artifacts** |   |   |   | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Docker Integration** |   |   |   |   | ✓ | ✓ | ✓ | ✓ |
+| **Testing** |   |   |   |   |   | ✓ | ✓ | ✓ |
+| **Security** |   |   |   |   |   |   | ✓ | ✓ |
+| **Advanced Patterns** |   |   |   |   |   |   |   | ✓ |
 
 ### Skill Development Track
 
+**After Lab 0:** You have your own GitLab environment for unlimited practice
 **After Lab 1:** You can create basic pipelines
 **After Lab 2:** You can organize complex workflows  
 **After Lab 3:** You can manage environments and deployments
@@ -182,6 +194,7 @@ your-gitlab-project/
 
 Track your progress through the labs:
 
+- [ ] **Lab 0**: GitLab Self-Hosting - Local GitLab environment running
 - [ ] **Lab 1**: Basic Pipeline - Pipeline runs successfully
 - [ ] **Lab 2**: Stages and Jobs - Multi-stage pipeline working
 - [ ] **Lab 3**: Variables and Artifacts - Environment deployments
@@ -240,4 +253,4 @@ After completing the labs:
 
 Choose your starting lab and begin building your CI/CD expertise!
 
-[Start with Lab 1 →](./lab-01-basic-pipeline/)
+[Start with Lab 0 (Self-Hosting) →](./lab-00-gitlab-self-host-docker/) | [Start with Lab 1 (Basic Pipeline) →](./lab-01-basic-pipeline/)

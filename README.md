@@ -23,6 +23,11 @@ This tutorial provides a comprehensive, hands-on approach to learning GitLab CI/
 
 ## 📚 Tutorial Structure
 
+### **Foundation Level**
+| Lab | Title | Duration | Concepts |
+|-----|-------|----------|----------|
+| [Lab 0](./labs/lab-00-gitlab-self-host-docker/) | GitLab Self-Hosting | 60 min | Local GitLab setup, runner configuration |
+
 ### **Beginner Level**
 | Lab | Title | Duration | Concepts |
 |-----|-------|----------|----------|
@@ -104,6 +109,13 @@ cat README.md
 
 ## 📄 Lab Overview
 
+### **Lab 0: GitLab Self-Hosting** 🏠
+Set up your own GitLab environment:
+- Self-hosted GitLab CE with Docker
+- GitLab Runner configuration and registration
+- Complete local development environment
+- Foundation for all subsequent labs
+
 ### **Lab 1: Basic Pipeline Setup** 🌱
 Learn the fundamentals of GitLab CI/CD:
 - Your first `.gitlab-ci.yml` file
@@ -163,22 +175,25 @@ Optimize pipeline execution:
 ## 📊 Learning Path Recommendations
 
 ### **For Beginners**
-1. Start with Labs 1-3 to build a solid foundation
-2. Practice each concept thoroughly before moving on
-3. Experiment with variations of the examples
-4. Read GitLab documentation for deeper understanding
+1. Start with Lab 0 to set up your own GitLab environment
+2. Continue with Labs 1-3 to build a solid foundation
+3. Practice each concept thoroughly before moving on
+4. Experiment with variations of the examples
+5. Read GitLab documentation for deeper understanding
 
 ### **For Intermediate Users**
-1. Review Labs 1-3 quickly if needed
-2. Focus on Labs 4-6 for practical implementation skills
-3. Apply concepts to your own projects
-4. Explore GitLab security and testing features
+1. Set up Lab 0 if you want a local environment (optional)
+2. Review Labs 1-3 quickly if needed
+3. Focus on Labs 4-6 for practical implementation skills
+4. Apply concepts to your own projects
+5. Explore GitLab security and testing features
 
 ### **For Advanced Users**
-1. Jump to Labs 7-8 for advanced patterns
-2. Use as reference for complex scenarios
-3. Contribute improvements and additional examples
-4. Share knowledge with your team
+1. Use Lab 0 for enterprise-like setups and team learning
+2. Jump to Labs 7-8 for advanced patterns
+3. Use as reference for complex scenarios
+4. Contribute improvements and additional examples
+5. Share knowledge with your team
 
 ## 🛠️ Troubleshooting Guide
 
