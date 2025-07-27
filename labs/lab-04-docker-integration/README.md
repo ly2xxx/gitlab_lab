@@ -152,3 +152,8 @@ After completing this lab, you'll have mastered:
 - Production deployment strategies
 
 Continue to **Lab 5: Comprehensive Testing Strategy** to implement advanced testing patterns in your containers.
+
+Other references:
+https://www.perplexity.ai/search/is-there-a-way-to-host-gitlab-UeoK3609QmWRv75GKywAAg
+https://embeddedinventor.com/complete-guide-to-setting-up-gitlab-locally-on-windows-pc/
+https://about.gitlab.com/install/#install-self-managed-gitlab
