@@ -168,3 +168,5 @@ When setup is complete, you should see:
 ---
 
 **Need help?** Check the main README.md troubleshooting section or Windows-specific issues above.
+
+![1753656782655](image/WINDOWS/1753656782655.png)

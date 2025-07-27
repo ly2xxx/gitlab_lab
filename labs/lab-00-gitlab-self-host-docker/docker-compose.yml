@@ -1,173 +1,19 @@
-version: '3.8'
-
 services:
   gitlab:
     image: 'gitlab/gitlab-ce:latest'
     restart: always
-    hostname: 'gitlab'
-    container_name: gitlab-ce
-    environment:
-      GITLAB_OMNIBUS_CONFIG: |
-        # External URL configuration
-        external_url 'https://localhost'
-        
-        # GitLab Rails configuration
-        gitlab_rails['gitlab_shell_ssh_port'] = 2224
-        gitlab_rails['time_zone'] = 'UTC'
-        
-        # Container Registry configuration
-        registry_external_url 'https://localhost:5050'
-        gitlab_rails['registry_enabled'] = true
-        
-        # CI/CD configuration
-        gitlab_ci['gitlab_ci_all_broken_builds'] = true
-        gitlab_ci['gitlab_ci_add_pusher'] = true
-        
-        # Performance tuning for development
-        postgresql['shared_preload_libraries'] = 'pg_stat_statements'
-        postgresql['track_activity_query_size'] = 1024
-        
-        # Disable unused services for better performance
-        alertmanager['enable'] = false
-        node_exporter['enable'] = false
-        redis_exporter['enable'] = false
-        postgres_exporter['enable'] = false
-        gitlab_exporter['enable'] = false
-        
-        # Email configuration (disabled for development)
-        gitlab_rails['smtp_enable'] = false
-        
-        # Security settings
-        nginx['redirect_http_to_https'] = true
-        nginx['ssl_certificate'] = "/etc/gitlab/ssl/gitlab.crt"
-        nginx['ssl_certificate_key'] = "/etc/gitlab/ssl/gitlab.key"
-        nginx['ssl_protocols'] = "TLSv1.2 TLSv1.3"
-        
-        # Backup configuration
-        gitlab_rails['backup_keep_time'] = 604800
-        gitlab_rails['backup_path'] = '/var/opt/gitlab/backups'
-        
-        # Git configuration
-        gitlab_rails['gitlab_shell_git_timeout'] = 800
-        
+    hostname: 'gitlab.local'
     ports:
-      - '80:80'      # HTTP
-      - '443:443'    # HTTPS
-      - '2224:22'    # SSH
-      - '5050:5050'  # Container Registry
+      - '80:80'
+      - '443:443'
+      - '22:22'
     volumes:
-      # Windows Docker Desktop: Use named volumes or current directory
-      # Uncomment the appropriate section based on your setup
-      
-      # Option 1: Use current directory (works on all platforms)
-      - './gitlab-data/config:/etc/gitlab'
-      - './gitlab-data/logs:/var/log/gitlab'
-      - './gitlab-data/data:/var/opt/gitlab'
-      - './config/ssl:/etc/gitlab/ssl'
-      
-      # Option 2: Use Windows user profile (if GITLAB_HOME is set)
-      # - '${GITLAB_HOME}/config:/etc/gitlab'
-      # - '${GITLAB_HOME}/logs:/var/log/gitlab'
-      # - '${GITLAB_HOME}/data:/var/opt/gitlab'
-      # - './config/ssl:/etc/gitlab/ssl'
-      
-      # Option 3: Use named volumes (most portable)
-      # - 'gitlab-config:/etc/gitlab'
-      # - 'gitlab-logs:/var/log/gitlab'
-      # - 'gitlab-data:/var/opt/gitlab'
-      # - './config/ssl:/etc/gitlab/ssl'
+      - 'gitlab_config:/etc/gitlab'
+      - 'gitlab_logs:/var/log/gitlab'
+      - 'gitlab_data:/var/opt/gitlab'
     shm_size: '256m'
-    ulimits:
-      sigpending: 62793
-      nproc: 131072
-      nofile: 60000
-      core: 0
-    healthcheck:
-      test: ["CMD", "/opt/gitlab/bin/gitlab-healthcheck", "--fail", "--max-time", "10"]
-      interval: 60s
-      timeout: 30s
-      retries: 5
-      start_period: 200s
-    networks:
-      - gitlab-network
-
-  gitlab-runner:
-    image: gitlab/gitlab-runner:latest
-    restart: always
-    container_name: gitlab-runner
-    volumes:
-      - './config/runner:/etc/gitlab-runner'
-      - '/var/run/docker.sock:/var/run/docker.sock'
-    environment:
-      - DOCKER_HOST=unix:///var/run/docker.sock
-    depends_on:
-      - gitlab
-    networks:
-      - gitlab-network
-    command: |
-      sh -c '
-        # Wait for GitLab to be ready
-        until curl -k -s https://gitlab >/dev/null 2>&1; do
-          echo "Waiting for GitLab to be ready..."
-          sleep 10
-        done
-        echo "GitLab is ready, starting runner..."
-        gitlab-runner run --user=gitlab-runner --working-directory=/home/gitlab-runner
-      '
-
-  # Optional: Redis for improved performance
-  redis:
-    image: redis:7-alpine
-    restart: always
-    container_name: gitlab-redis
-    command: redis-server --appendonly yes
-    volumes:
-      - gitlab-redis-data:/data
-    networks:
-      - gitlab-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-
-  # Optional: PostgreSQL for improved performance
-  postgresql:
-    image: postgres:15-alpine
-    restart: always
-    container_name: gitlab-postgresql
-    environment:
-      POSTGRES_DB: gitlabhq_production
-      POSTGRES_USER: gitlab
-      POSTGRES_PASSWORD: gitlab_password
-      POSTGRES_INITDB_ARGS: '--encoding=UTF-8 --lc-collate=C --lc-ctype=C'
-    volumes:
-      - gitlab-postgresql-data:/var/lib/postgresql/data
-    networks:
-      - gitlab-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gitlab -d gitlabhq_production"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
 
 volumes:
-  gitlab-redis-data:
-    driver: local
-  gitlab-postgresql-data:
-    driver: local
-  
-  # Optional: Named volumes for GitLab data (uncomment if using Option 3 above)
-  # gitlab-config:
-  #   driver: local
-  # gitlab-logs:
-  #   driver: local
-  # gitlab-data:
-  #   driver: local
-
-networks:
-  gitlab-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:
