@@ -93,6 +93,22 @@ docker-compose exec gitlab cat /etc/gitlab/initial_root_password
 3. Visibility Level: **Private**
 4. Initialize with README: ✅
 
+### 4. Clone Your Project
+When cloning repositories from your local GitLab instance, use `localhost` instead of `gitlab.local`:
+
+```bash
+# Correct way to clone from local GitLab
+git clone http://localhost/root/your-project-name.git
+
+# Alternative options if localhost doesn't work:
+# Option 1: Add to hosts file (127.0.0.1 gitlab.local)
+git clone http://gitlab.local/root/your-project-name.git
+
+# Option 2: Use container IP directly
+# First find IP: docker inspect lab-00-gitlab-self-host-docker-gitlab-1 | grep IPAddress
+git clone http://CONTAINER_IP/root/your-project-name.git
+```
+
 ## 🛠️ Management Commands
 
 ```bash
@@ -158,6 +174,17 @@ curl -I http://localhost
 docker-compose down
 docker run --detach --hostname gitlab.local --publish 80:80 --publish 443:443 --publish 22:22 --name gitlab --restart always --volume gitlab_config:/etc/gitlab --volume gitlab_logs:/var/log/gitlab --volume gitlab_data:/var/opt/gitlab --shm-size 256m gitlab/gitlab-ce:latest
 ```
+![alt text](image.png)
+
+    1. Set local git configuration (repository-specific, won't affect global config):
+      - git config --local user.name "Developer"
+      - git config --local user.email "developer@localhost"
+    2. Add untracked file to commit:
+      - git add CLAUDE.md
+    3. Create commit:
+      - git commit -m "Add GitLab CI/CD pipeline and documentation"
+    4. Push to local GitLab CE server:
+      - git push origin main
 
 ## 🎉 Success Indicators
 
