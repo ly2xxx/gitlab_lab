@@ -86,6 +86,10 @@ docker-compose exec gitlab cat /etc/gitlab/initial_root_password
 2. Username: **root**
 3. Password: Use the password from step 1
 4. **Change the password immediately** after first login
+5. ⚠️ **If password file doesn't exist** (already been configured), reset the root password:
+   ```bash
+   docker-compose exec gitlab gitlab-rails runner "user = User.find(1); user.password = 'newpassword123'; user.password_confirmation = 'newpassword123'; user.save!"
+   ```
 
 ### 3. Create Your First Project
 1. Click **New project** → **Create blank project**
