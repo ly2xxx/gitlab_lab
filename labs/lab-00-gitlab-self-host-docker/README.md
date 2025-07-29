@@ -86,10 +86,10 @@ docker-compose exec gitlab cat /etc/gitlab/initial_root_password
 2. Username: **root**
 3. Password: Use the password from step 1
 4. **Change the password immediately** after first login
-5. ⚠️ **If password file doesn't exist** (already been configured), reset the root password:
-   ```bash
-   docker-compose exec gitlab gitlab-rails runner "user = User.find(1); user.password = 'newpassword123'; user.password_confirmation = 'newpassword123'; user.save!"
-   ```
+      ⚠️ **If password file doesn't exist** (already been configured), reset the root password:
+       ```bash
+       docker-compose exec gitlab gitlab-rails runner "user = User.find(1); user.password = 'newpassword123'; user.password_confirmation = 'newpassword123'; user.save!"
+       ```
 
 ### 3. Create Your First Project
 1. Click **New project** → **Create blank project**
@@ -97,7 +97,74 @@ docker-compose exec gitlab cat /etc/gitlab/initial_root_password
 3. Visibility Level: **Private**
 4. Initialize with README: ✅
 
-### 4. Clone Your Project
+### 4. Install GitLab Runner (Optional)
+For CI/CD pipelines, install a GitLab Runner:
+
+**Windows (Git Bash/PowerShell):**
+```bash
+# Create config directory (use Docker volume to avoid Windows path issues)
+docker volume create gitlab-runner-config
+
+# Install GitLab Runner
+docker run -d --name gitlab-runner --restart always \
+  -v gitlab-runner-config:/etc/gitlab-runner \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  gitlab/gitlab-runner:latest
+```
+
+**Linux/macOS:**
+```bash
+# Create config directory
+mkdir -p ~/gitlab-runner/config
+
+# Install GitLab Runner
+docker run -d --name gitlab-runner --restart always \
+  -v ~/gitlab-runner/config:/etc/gitlab-runner \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  gitlab/gitlab-runner:latest
+```
+
+**Register the Runner** (after creating a project):
+1. Go to your project → Settings → CI/CD → Runners
+2. Click "New project runner" → Create runner → Copy the `glrt-` token
+3. Register the runner interactively:
+```bash
+docker exec -it gitlab-runner gitlab-runner register
+```
+
+When prompted, enter:
+- **GitLab instance URL:** `http://host.docker.internal`
+- **Registration token:** Your `glrt-` token from step 2
+- **Runner name:** `gitlab-runner` (or press Enter for default)
+- **Executor:** `docker`
+- **Default Docker image:** `alpine:latest`
+
+**Expected output:**
+```
+Runner registered successfully. Feel free to start it, but if it's running already the config should be automatically reloaded!
+Configuration (with the authentication token) was saved in "/etc/gitlab-runner/config.toml"
+```
+
+**🔧 Fix Clone URL Issue (if pipelines fail with "Could not resolve host: gitlab.local"):**
+
+If your pipeline fails with DNS resolution errors, re-register the runner with the correct clone URL:
+
+```bash
+# Unregister current runner
+docker exec gitlab-runner gitlab-runner unregister --all-runners
+
+# Re-register with clone URL fix (replace YOUR_GLRT_TOKEN with your actual token)
+docker exec gitlab-runner gitlab-runner register \
+  --url http://host.docker.internal \
+  --token YOUR_GLRT_TOKEN \
+  --executor docker \
+  --docker-image alpine:latest \
+  --description "Local Docker Runner" \
+  --clone-url http://host.docker.internal \
+  --non-interactive
+```
+
+### 5. Clone Your Project
 When cloning repositories from your local GitLab instance, use `localhost` instead of `gitlab.local`:
 
 ```bash

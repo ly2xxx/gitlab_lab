@@ -2,7 +2,7 @@ services:
   gitlab:
     image: 'gitlab/gitlab-ce:latest'
     restart: always
-    hostname: 'gitlab.local'
+    hostname: 'host.docker.internal'
     ports:
       - '80:80'
       - '443:443'
@@ -12,6 +12,10 @@ services:
       - 'gitlab_logs:/var/log/gitlab'
       - 'gitlab_data:/var/opt/gitlab'
     shm_size: '256m'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://localhost'
+        gitlab_rails['gitlab_shell_ssh_port'] = 22
 
 volumes:
   gitlab_config:
