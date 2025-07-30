@@ -98,6 +98,8 @@ docker-compose exec gitlab cat /etc/gitlab/initial_root_password
 4. Initialize with README: ✅
 
 ### 4. Install GitLab Runner (Optional)
+⚠️ **The below docker commands if run on windows, must be executed from PowerShell (ideally as admin)**
+
 For CI/CD pipelines, install a GitLab Runner:
 
 **Windows (Git Bash/PowerShell):**
