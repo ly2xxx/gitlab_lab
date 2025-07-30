@@ -1,0 +1,381 @@
+# Reusable Templates for Conditional Pipeline Lab
+# This file defines common templates and patterns used across pipeline configurations
+
+# =============================================================================
+# BASE TEMPLATES
+# =============================================================================
+
+# Base template for all jobs with common configurations
+.base-job:
+  interruptible: true
+  timeout: "1h"
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  before_script:
+    - echo "=== Job Information ==="
+    - echo "Job: $CI_JOB_NAME"
+    - echo "Stage: $CI_JOB_STAGE"
+    - echo "Pipeline: $CI_PIPELINE_ID"
+    - echo "Commit: $CI_COMMIT_SHORT_SHA"
+    - echo "Branch: $CI_COMMIT_REF_NAME"
+    - echo "=== Environment Setup ==="
+
+# Template for validation jobs
+.validation-job:
+  extends: .base-job
+  stage: validate
+  artifacts:
+    reports:
+      junit: "test-results/validation/junit.xml"
+    paths:
+      - "test-results/validation/"
+    expire_in: 1 day
+    when: always
+
+# Template for testing jobs
+.test-job:
+  extends: .base-job
+  stage: test
+  artifacts:
+    reports:
+      junit: "test-results/*/junit.xml"
+      coverage: "coverage/lcov.info"
+    paths:
+      - "test-results/"
+      - "coverage/"
+    expire_in: 1 day
+    when: always
+
+# Template for integration testing jobs
+.integration-job:
+  extends: .base-job
+  stage: integration
+  artifacts:
+    reports:
+      junit: "test-results/integration/junit.xml"
+    paths:
+      - "test-results/integration/"
+      - "reports/integration/"
+    expire_in: 1 week
+
+# Template for reporting jobs
+.report-job:
+  extends: .base-job
+  stage: report
+  artifacts:
+    paths:
+      - "reports/"
+    expire_in: 1 month
+
+# =============================================================================
+# LANGUAGE-SPECIFIC TEMPLATES
+# =============================================================================
+
+# Python base template
+.python-base:
+  extends: .base-job
+  image: $PYTHON_IMAGE
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+    PYTHONPATH: "$CI_PROJECT_DIR"
+  cache:
+    key: "python-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cache/pip/
+      - .venv/
+    policy: pull-push
+  before_script:
+    - !reference [.base-job, before_script]
+    - echo "Python version: $(python --version)"
+    - echo "Pip version: $(pip --version)"
+    - mkdir -p .cache/pip test-results reports
+
+# Node.js base template
+.nodejs-base:
+  extends: .base-job
+  image: $NODE_IMAGE
+  variables:
+    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.npm"
+    NODE_ENV: "test"
+  cache:
+    key: "nodejs-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .npm/
+      - node_modules/
+    policy: pull-push
+  before_script:
+    - !reference [.base-job, before_script]
+    - echo "Node.js version: $(node --version)"
+    - echo "NPM version: $(npm --version)"
+    - mkdir -p test-results reports
+
+# Java base template
+.java-base:
+  extends: .base-job
+  image: $JAVA_IMAGE
+  variables:
+    MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository -Xmx1024m"
+    GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx1024m"
+  cache:
+    key: "java-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .m2/repository/
+      - .gradle/caches/
+      - .gradle/wrapper/
+    policy: pull-push
+  before_script:
+    - !reference [.base-job, before_script]
+    - echo "Java version: $(java -version 2>&1 | head -1)"
+    - mkdir -p test-results reports
+
+# =============================================================================
+# CONDITIONAL EXECUTION TEMPLATES
+# =============================================================================
+
+# Template for Python conditional jobs
+.python-conditional:
+  extends: .python-base
+  rules:
+    - changes:
+        - "templates/python/**/*"
+        - "shared/python/**/*"
+        - "labs/lab-09-conditional-pipeline/scripts/test-python-pipelines.sh"
+      when: always
+    - when: never
+
+# Template for Node.js conditional jobs
+.nodejs-conditional:
+  extends: .nodejs-base
+  rules:
+    - changes:
+        - "templates/nodejs/**/*"
+        - "shared/nodejs/**/*"
+        - "labs/lab-09-conditional-pipeline/scripts/test-nodejs-pipelines.sh"
+      when: always
+    - when: never
+
+# Template for Java conditional jobs
+.java-conditional:
+  extends: .java-base
+  rules:
+    - changes:
+        - "templates/java/**/*"
+        - "shared/java/**/*"
+        - "labs/lab-09-conditional-pipeline/scripts/test-java-pipelines.sh"
+      when: always
+    - when: never
+
+# Template for shared component changes
+.shared-conditional:
+  extends: .base-job
+  rules:
+    - changes:
+        - "shared/common/**/*"
+        - ".gitlab-ci.yml"
+        - "labs/lab-09-conditional-pipeline/**/*"
+      when: always
+    - when: never
+
+# =============================================================================
+# TESTING TEMPLATES
+# =============================================================================
+
+# Template for unit testing
+.unit-test:
+  extends: .test-job
+  script:
+    - echo "Running unit tests..."
+    - echo "This would run language-specific unit tests"
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+
+# Template for integration testing
+.integration-test:
+  extends: .integration-job
+  script:
+    - echo "Running integration tests..."
+    - echo "This would run cross-component integration tests"
+
+# Template for security testing
+.security-test:
+  extends: .test-job
+  stage: security
+  script:
+    - echo "Running security scans..."
+    - echo "This would run security vulnerability scans"
+  allow_failure: true
+
+# Template for performance testing
+.performance-test:
+  extends: .test-job
+  stage: test
+  script:
+    - echo "Running performance tests..."
+    - echo "This would run performance benchmarks"
+  artifacts:
+    reports:
+      performance: "performance/performance.json"
+    paths:
+      - "performance/"
+
+# =============================================================================
+# DEPLOYMENT TEMPLATES
+# =============================================================================
+
+# Template for staging deployments
+.deploy-staging:
+  extends: .base-job
+  stage: deploy
+  environment:
+    name: staging
+    url: https://staging.example.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+      when: manual
+    - when: never
+
+# Template for production deployments
+.deploy-production:
+  extends: .base-job
+  stage: deploy
+  environment:
+    name: production
+    url: https://production.example.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+    - when: never
+
+# =============================================================================
+# NOTIFICATION TEMPLATES
+# =============================================================================
+
+# Template for success notifications
+.notify-success:
+  extends: .base-job
+  stage: .post
+  image: alpine:latest
+  script:
+    - echo "Pipeline completed successfully!"
+    - echo "Would send success notification here"
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: on_success
+    - when: never
+
+# Template for failure notifications
+.notify-failure:
+  extends: .base-job
+  stage: .post
+  image: alpine:latest
+  script:
+    - echo "Pipeline failed!"
+    - echo "Would send failure notification here"
+  rules:
+    - when: on_failure
+
+# =============================================================================
+# MATRIX TESTING TEMPLATES
+# =============================================================================
+
+# Template for matrix testing
+.matrix-test:
+  extends: .test-job
+  parallel:
+    matrix:
+      - LANGUAGE: [python, nodejs, java]
+        TEMPLATE_TYPE: [basic, advanced]
+  script:
+    - echo "Matrix testing: $LANGUAGE - $TEMPLATE_TYPE"
+    - ./labs/lab-09-conditional-pipeline/scripts/test-template-matrix.sh $LANGUAGE $TEMPLATE_TYPE
+
+# =============================================================================
+# CHILD PIPELINE TEMPLATES  
+# =============================================================================
+
+# Template for triggering child pipelines
+.trigger-child:
+  extends: .base-job
+  stage: test
+  trigger:
+    strategy: depend
+  variables:
+    PARENT_PIPELINE_ID: $CI_PIPELINE_ID
+    TRIGGER_SOURCE: "conditional-execution"
+
+# Template for Python child pipeline
+.trigger-python-child:
+  extends: .trigger-child
+  trigger:
+    include: 
+      - local: 'labs/lab-09-conditional-pipeline/ci/python-pipeline.yml'
+  rules:
+    - changes:
+        - "templates/python/**/*"
+        - "shared/python/**/*"
+
+# Template for Node.js child pipeline
+.trigger-nodejs-child:
+  extends: .trigger-child
+  trigger:
+    include: 
+      - local: 'labs/lab-09-conditional-pipeline/ci/nodejs-pipeline.yml'
+  rules:
+    - changes:
+        - "templates/nodejs/**/*"
+        - "shared/nodejs/**/*"
+
+# Template for Java child pipeline
+.trigger-java-child:
+  extends: .trigger-child
+  trigger:
+    include: 
+      - local: 'labs/lab-09-conditional-pipeline/ci/java-pipeline.yml'
+  rules:
+    - changes:
+        - "templates/java/**/*"
+        - "shared/java/**/*"
+
+# =============================================================================
+# UTILITY TEMPLATES
+# =============================================================================
+
+# Template for cleanup jobs
+.cleanup:
+  extends: .base-job
+  stage: .post
+  image: alpine:latest
+  script:
+    - echo "Cleaning up temporary files..."
+    - rm -rf tmp/ .cache/ || true
+  when: always
+
+# Template for debug jobs
+.debug:
+  extends: .base-job
+  image: alpine:latest
+  script:
+    - echo "=== Debug Information ==="
+    - echo "CI Variables:"
+    - env | grep ^CI_ | sort
+    - echo "=== File System ==="
+    - ls -la
+    - echo "=== Git Information ==="
+    - git log --oneline -5 || echo "Git not available"
+  when: manual
+  allow_failure: true
+
+# Template for validation with custom rules
+.validate-with-rules:
+  extends: .validation-job
+  script:
+    - echo "Validating configuration files..."
+    - find . -name "*.yml" -exec echo "Checking: {}" \;
+  rules:
+    - changes:
+        - "**/*.yml"
+        - "**/*.yaml"
+      when: always
+    - when: never

@@ -1,0 +1,72 @@
+# Common Variables for Conditional Pipeline Lab
+# This file defines shared variables used across all pipeline configurations
+
+variables:
+  # Version configurations
+  PYTHON_VERSION: "3.9"
+  NODE_VERSION: "16" 
+  JAVA_VERSION: "11"
+  
+  # Docker image configurations
+  PYTHON_IMAGE: "python:${PYTHON_VERSION}-slim"
+  NODE_IMAGE: "node:${NODE_VERSION}-slim" 
+  JAVA_IMAGE: "openjdk:${JAVA_VERSION}-jdk-slim"
+  ALPINE_IMAGE: "alpine:latest"
+  
+  # Git configurations
+  GIT_DEPTH: 50
+  GIT_STRATEGY: "fetch"
+  
+  # Performance optimizations
+  FF_USE_FASTZIP: "true"
+  CACHE_COMPRESSION_LEVEL: "fastest"
+  
+  # Cache configurations
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.npm"
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository -Xmx1024m"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Xmx1024m"
+  
+  # Testing configurations
+  PYTHONPATH: "$CI_PROJECT_DIR"
+  NODE_ENV: "test"
+  SPRING_PROFILES_ACTIVE: "test"
+  
+  # Report configurations
+  JUNIT_REPORT_PATH: "test-results/**/junit.xml"
+  COVERAGE_REPORT_PATH: "coverage/lcov.info"
+  
+  # Security configurations
+  SECURE_LOG_LEVEL: "info"
+  SECURITY_SCAN_ENABLED: "true"
+  
+  # Conditional execution configurations
+  ENABLE_CONDITIONAL_EXECUTION: "true"
+  ENABLE_CHANGE_DETECTION: "true" 
+  ENABLE_CHILD_PIPELINES: "true"
+  
+  # Performance tracking
+  ENABLE_PERFORMANCE_METRICS: "true"
+  METRICS_COLLECTION_ENABLED: "true"
+  
+  # Language-specific optimizations
+  PYTHON_PIP_NO_DEPS: "false"
+  PYTHON_PIP_DISABLE_PIP_VERSION_CHECK: "true"
+  NODE_OPTIONS: "--max-old-space-size=1024"
+  NPM_CONFIG_PREFER_OFFLINE: "true"
+  JAVA_TOOL_OPTIONS: "-Xmx1024m -Djava.awt.headless=true"
+  
+  # Artifact configurations
+  ARTIFACT_EXPIRE_IN: "1 week"
+  REPORT_EXPIRE_IN: "1 month"
+  CACHE_EXPIRE_IN: "1 day"
+  
+  # Notification configurations  
+  NOTIFICATION_ENABLED: "false"
+  SLACK_WEBHOOK_URL: ""
+  EMAIL_NOTIFICATIONS: "false"
+  
+  # Debug configurations
+  DEBUG_MODE: "false"
+  VERBOSE_LOGGING: "false"
+  CI_DEBUG_TRACE: "false"

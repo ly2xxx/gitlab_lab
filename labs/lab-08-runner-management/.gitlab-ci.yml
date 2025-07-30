@@ -1,0 +1,260 @@
+# Pipeline utilizing specialized runners for different workloads
+stages:
+  - build
+  - test
+  - security
+  - deploy
+  - monitor
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# Regular build job using standard runners
+build-app:
+  stage: build
+  tags:
+    - docker
+    - linux
+    - general-purpose
+  image: node:18
+  script:
+    - echo "Building application with standard runner..."
+    - npm ci --cache .npm --prefer-offline
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 hour
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .npm/
+      - node_modules/
+
+# CPU-intensive compilation using high-performance runners
+build-native:
+  stage: build
+  tags:
+    - high-performance
+    - cpu-intensive
+    - large-memory
+  image: gcc:latest
+  script:
+    - echo "Compiling native binaries with high-performance runner..."
+    - gcc -O3 -march=native -fopenmp src/*.c -o app-native
+    - strip app-native
+  artifacts:
+    paths:
+      - app-native
+    expire_in: 1 day
+  parallel:
+    matrix:
+      - ARCH: ["x86_64", "aarch64"]
+        OPTIMIZATION: ["-O2", "-O3", "-Ofast"]
+
+# GPU-accelerated ML model training
+train-ml-model:
+  stage: test
+  tags:
+    - gpu
+    - cuda
+    - machine-learning
+    - ai
+  image: tensorflow/tensorflow:latest-gpu
+  script:
+    - echo "Training ML model with GPU acceleration..."
+    - nvidia-smi  # Verify GPU availability
+    - python scripts/train_model.py --use-gpu --epochs=100
+    - python scripts/evaluate_model.py --model-path=model/
+  artifacts:
+    paths:
+      - model/
+      - training-logs/
+    expire_in: 1 week
+  only:
+    - main
+    - develop
+
+# Parallel unit tests with matrix strategy
+unit-tests-matrix:
+  stage: test
+  tags:
+    - docker
+    - linux
+    - parallel-testing
+  image: node:$NODE_VERSION
+  script:
+    - npm ci
+    - npm test -- --maxWorkers=4
+  parallel:
+    matrix:
+      - NODE_VERSION: ["16", "18", "20"]
+        TEST_SUITE: ["unit", "integration"]
+  cache:
+    key: "test-$NODE_VERSION-$TEST_SUITE"
+    paths:
+      - node_modules/
+
+# Security scanning with restricted permissions
+security-scan:
+  stage: security
+  tags:
+    - security
+    - restricted
+    - compliance
+  image: security-scanner:latest
+  script:
+    - echo "Running security scans with restricted runner..."
+    - security-scanner --scan-path ./
+    - compliance-check --rules security-rules.yml
+    - audit-dependencies --severity high
+  artifacts:
+    reports:
+      sast: security-report.sarif
+    paths:
+      - security-report.html
+      - compliance-report.json
+    when: always
+  allow_failure: false
+
+# Container vulnerability scanning
+container-security:
+  stage: security
+  tags:
+    - security
+    - container-scanning
+  image: aquasec/trivy:latest
+  script:
+    - trivy image --format sarif --output container-scan.sarif $CI_REGISTRY_IMAGE:latest
+    - trivy image --severity HIGH,CRITICAL $CI_REGISTRY_IMAGE:latest
+  artifacts:
+    reports:
+      container_scanning: container-scan.sarif
+
+# Kubernetes deployment using K8s runners
+deploy-k8s:
+  stage: deploy
+  tags:
+    - kubernetes
+    - k8s
+    - cloud-native
+  image: bitnami/kubectl:latest
+  script:
+    - echo "Deploying to Kubernetes with K8s runner..."
+    - kubectl config use-context production
+    - kubectl apply -f k8s/deployment.yaml
+    - kubectl apply -f k8s/service.yaml
+    - kubectl apply -f k8s/ingress.yaml
+    - kubectl rollout status deployment/myapp --timeout=300s
+  environment:
+    name: production
+    url: https://myapp.example.com
+    kubernetes:
+      namespace: production
+  only:
+    - main
+  when: manual
+
+# Performance testing with dedicated runners
+performance-tests:
+  stage: test
+  tags:
+    - performance-testing
+    - high-memory
+    - network-optimized
+  image: loadimpact/k6:latest
+  script:
+    - echo "Running performance tests with dedicated runner..."
+    - k6 run --vus 100 --duration 5m performance-test.js
+    - k6 run --vus 500 --duration 2m stress-test.js
+  artifacts:
+    reports:
+      performance: performance-results.json
+    paths:
+      - performance-report.html
+    expire_in: 1 week
+  only:
+    - main
+    - performance/*
+
+# Database migration with specialized runner
+database-migration:
+  stage: deploy
+  tags:
+    - database
+    - migration
+    - secure-network
+  image: migrate/migrate:latest
+  script:
+    - echo "Running database migrations..."
+    - migrate -path migrations -database $DATABASE_URL up
+  environment:
+    name: production-db
+  only:
+    - main
+  when: manual
+  before_script:
+    - echo "Validating database connection..."
+    - pg_isready -h $DB_HOST -p $DB_PORT
+
+# Multi-arch build using specialized runners
+build-multi-arch:
+  stage: build
+  tags:
+    - docker
+    - buildx
+    - multi-architecture
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - docker buildx create --use
+    - docker buildx build --platform linux/amd64,linux/arm64 -t $CI_REGISTRY_IMAGE:multi-arch --push .
+  only:
+    - tags
+
+# Monitoring and metrics collection
+post-deploy-monitoring:
+  stage: monitor
+  tags:
+    - monitoring
+    - metrics
+  image: prom/prometheus:latest
+  script:
+    - echo "Collecting deployment metrics..."
+    - curl -X POST $WEBHOOK_URL -d "Deployment completed for $CI_COMMIT_SHA"
+    - python scripts/collect-metrics.py --deployment-id $CI_PIPELINE_ID
+  dependencies:
+    - deploy-k8s
+  when: on_success
+
+# Cleanup and resource management
+cleanup-resources:
+  stage: monitor
+  tags:
+    - cleanup
+    - resource-management
+  image: alpine:latest
+  script:
+    - echo "Cleaning up temporary resources..."
+    - apk add --no-cache curl
+    - curl -X DELETE $TEMP_RESOURCE_API/cleanup/$CI_PIPELINE_ID
+  when: always
+  allow_failure: true
+
+# Runner health check and reporting
+runner-health-check:
+  stage: monitor
+  tags:
+    - monitoring
+    - health-check
+  image: curlimages/curl:latest
+  script:
+    - echo "Checking runner fleet health..."
+    - curl -f $RUNNER_HEALTH_ENDPOINT || echo "Health check warning"
+    - echo "Pipeline completed on runner: $RUNNER_ID"
+  variables:
+    RUNNER_ID: "$CI_RUNNER_ID"
+  when: always
+  allow_failure: true

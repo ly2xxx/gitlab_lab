@@ -1,0 +1,113 @@
+# Prometheus configuration for GitLab Runner monitoring
+# config/monitoring/prometheus.yml
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'gitlab-runners'
+    region: 'us-east-1'
+
+rule_files:
+  - "alerting-rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # GitLab Runner metrics
+  - job_name: 'gitlab-runner'
+    static_configs:
+      - targets:
+        - 'runner-1:9252'
+        - 'runner-2:9252'
+        - 'runner-3:9252'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets:
+        - 'runner-1:9100'
+        - 'runner-2:9100'
+        - 'runner-3:9100'
+    scrape_interval: 10s
+    
+  # Docker metrics
+  - job_name: 'docker'
+    static_configs:
+      - targets:
+        - 'runner-1:9323'
+        - 'runner-2:9323'
+        - 'runner-3:9323'
+    scrape_interval: 10s
+    
+  # cAdvisor for container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets:
+        - 'runner-1:8080'
+        - 'runner-2:8080'
+        - 'runner-3:8080'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    
+  # GitLab instance metrics (if accessible)
+  - job_name: 'gitlab'
+    static_configs:
+      - targets:
+        - 'gitlab.example.com:443'
+    scheme: https
+    metrics_path: '/-/metrics'
+    scrape_interval: 30s
+    
+  # Kubernetes metrics (if using K8s runners)
+  - job_name: 'kubernetes-apiservers'
+    kubernetes_sd_configs:
+    - role: endpoints
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+      action: keep
+      regex: default;kubernetes;https
+      
+  # Custom application metrics
+  - job_name: 'custom-apps'
+    static_configs:
+      - targets:
+        - 'app-1:8080'
+        - 'app-2:8080'
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    
+  # Blackbox exporter for endpoint monitoring
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - https://gitlab.example.com
+        - https://runner-1.example.com:9252
+        - https://runner-2.example.com:9252
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+        
+  # Self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets:
+        - 'localhost:9090'
+    scrape_interval: 10s

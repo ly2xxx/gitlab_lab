@@ -1,0 +1,23 @@
+{
+  "name": "gitlab-orchestration-lab",
+  "version": "1.0.0",
+  "description": "Advanced pipeline orchestration and multi-project workflows",
+  "scripts": {
+    "generate:pipelines": "python scripts/generate-service-pipelines.py",
+    "discover:services": "python scripts/service-discovery.py",
+    "orchestrate:deploy": "python scripts/deployment-orchestrator.py",
+    "test:integration": "newman run tests/postman/integration-collection.json",
+    "test:performance": "k6 run tests/k6/integration-load-test.js",
+    "validate:pipelines": "yamllint .gitlab-ci.yml .gitlab/pipelines/*.yml"
+  },
+  "devDependencies": {
+    "newman": "^5.3.2"
+  },
+  "keywords": [
+    "gitlab",
+    "ci-cd",
+    "orchestration",
+    "microservices",
+    "devops"
+  ]
+}
