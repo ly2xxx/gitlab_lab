@@ -31,7 +31,7 @@ cd labs/lab-00-gitlab-self-host-docker
 docker-compose up -d
 
 # Wait 3-5 minutes, then access GitLab at:
-# http://localhost
+# http://host.docker.internal
 ```
 
 ### Method 2: Single Docker Command
@@ -59,14 +59,14 @@ docker-compose ps
 ### Test Connection (After 3-5 minutes)
 ```bash
 # Should return HTTP 302 redirect to sign-in page
-curl -I http://localhost
+curl -I http://host.docker.internal
 ```
 
 **Expected Response:**
 ```
 HTTP/1.1 302 Found
 Server: nginx
-Location: http://localhost/users/sign_in
+Location: http://host.docker.internal/users/sign_in
 X-Gitlab-Meta: {"correlation_id":"...","version":"1"}
 ```
 
@@ -127,6 +127,8 @@ docker run -d --name gitlab-runner --restart always \
 **Register the Runner** (after creating a project):
 1. Go to your project → Settings → CI/CD → Runners
 2. Click "New project runner" → Create runner → Copy the `glrt-` token
+![Create_Runner](image/README/1753913621209.png)
+![glrt-token](image/README/1753913742001.png)
 3. Register the runner interactively:
 ```bash
 docker exec -it gitlab-runner gitlab-runner register
@@ -219,7 +221,7 @@ docker-compose logs gitlab | tail -50
 
 **Test connection:**
 ```bash
-curl -I http://localhost
+curl -I http://host.docker.internal
 # Should return HTTP 302, not connection refused
 ```
 
@@ -239,12 +241,8 @@ curl -I http://localhost
 - Add Docker Desktop to firewall exceptions
 - Or temporarily disable firewall for testing
 
-**Still not working?**
-```bash
-# Try the alternative single container method:
-docker-compose down
-docker run --detach --hostname gitlab.local --publish 80:80 --publish 443:443 --publish 22:22 --name gitlab --restart always --volume gitlab_config:/etc/gitlab --volume gitlab_logs:/var/log/gitlab --volume gitlab_data:/var/opt/gitlab --shm-size 256m gitlab/gitlab-ce:latest
-```
+**Git Commit Issues**
+
 ![alt text](image.png)
 
     1. Set local git configuration (repository-specific, won't affect global config):

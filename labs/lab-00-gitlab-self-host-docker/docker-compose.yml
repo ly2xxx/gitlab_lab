@@ -14,7 +14,7 @@ services:
     shm_size: '256m'
     environment:
       GITLAB_OMNIBUS_CONFIG: |
-        external_url 'http://localhost'
+        external_url 'http://host.docker.internal'
         gitlab_rails['gitlab_shell_ssh_port'] = 22
 
 volumes:
