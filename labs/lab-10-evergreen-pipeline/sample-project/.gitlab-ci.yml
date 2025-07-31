@@ -1,0 +1,149 @@
+# GitLab CI/CD configuration for Evergreen Scanner
+# This pipeline runs the evergreen scanner on a schedule to check for Docker image updates
+
+stages:
+  - scan
+  - test
+  - security
+
+variables:
+  PYTHON_VERSION: "3.11"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key: "${CI_JOB_NAME}"
+  paths:
+    - .cache/pip
+    - venv/
+
+# Evergreen Scanner Job
+evergreen_scan:
+  stage: scan
+  image: python:${PYTHON_VERSION}-slim
+  before_script:
+    - python -m venv venv
+    - source venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+  script:
+    - echo "Running Evergreen Scanner..."
+    - python evergreen_scanner.py
+  variables:
+    # These should be set as protected CI/CD variables in GitLab
+    GITLAB_URL: ${CI_SERVER_URL}
+    GITLAB_ACCESS_TOKEN: ${EVERGREEN_ACCESS_TOKEN}
+    GITLAB_PROJECT_PATH: ${CI_PROJECT_PATH}
+    LOG_LEVEL: INFO
+  rules:
+    # Run on schedule (set up in GitLab -> CI/CD -> Schedules)
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    # Also allow manual trigger
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+    # Skip on evergreen branches to avoid recursion
+    - if: $CI_COMMIT_REF_NAME =~ /^evergreen\//
+      when: never
+  artifacts:
+    reports:
+      # Store scan results
+      junit: scan_results.xml
+    paths:
+      - logs/
+    expire_in: 1 week
+  allow_failure: false
+
+# Test the scanner code
+test_scanner:
+  stage: test
+  image: python:${PYTHON_VERSION}-slim
+  before_script:
+    - python -m venv venv
+    - source venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+    - pip install pytest pytest-cov
+  script:
+    - echo "Running tests for evergreen scanner..."
+    - python -m pytest tests/ -v --cov=evergreen_scanner --cov-report=xml
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - htmlcov/
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Security scanning
+security_scan:
+  stage: security
+  image: python:${PYTHON_VERSION}-slim
+  before_script:
+    - pip install safety bandit
+  script:
+    - echo "Running security scans..."
+    - safety check -r requirements.txt
+    - bandit -r . -f json -o bandit_report.json
+  artifacts:
+    reports:
+      security:
+        - bandit_report.json
+    expire_in: 1 week
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Docker image scanning (for Dockerfiles in the repo)
+docker_scan:
+  stage: security
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - docker info
+    - apk add --no-cache curl
+  script:
+    - echo "Scanning Docker images for vulnerabilities..."
+    # Build the sample image
+    - cd sample-project
+    - docker build -t sample-app:${CI_COMMIT_SHA} .
+    # Use Trivy for vulnerability scanning
+    - |
+      curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      trivy image --exit-code 0 --no-progress --format json -o trivy_report.json sample-app:${CI_COMMIT_SHA}
+  artifacts:
+    reports:
+      security:
+        - sample-project/trivy_report.json
+    expire_in: 1 week
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - changes:
+        - "sample-project/Dockerfile"
+        - "**/*.dockerfile"
+
+# Notification job (runs after scan completion)
+notify_results:
+  stage: .post
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - echo "Evergreen scan completed"
+    - echo "Pipeline ID: ${CI_PIPELINE_ID}"
+    - echo "Commit: ${CI_COMMIT_SHA}"
+    - echo "Check the merge requests tab for any dependency updates"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+  when: always
