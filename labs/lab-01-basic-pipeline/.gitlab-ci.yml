@@ -8,13 +8,13 @@ variables:
 hello_world:
   script:
     - echo "$GREETING"
-    - echo "Project: $PROJECT_NAME"
+    - echo "Project $PROJECT_NAME"
     - echo "GitLab variables:"
-    - echo "Project: $CI_PROJECT_NAME"
-    - echo "Branch: $CI_COMMIT_REF_NAME"
-    - echo "Pipeline ID: $CI_PIPELINE_ID"
-    - echo "Commit SHA: $CI_COMMIT_SHA"
-    - echo "Runner: $CI_RUNNER_DESCRIPTION"
+    - echo "Project ${CI_PROJECT_NAME}"
+    - echo "Branch:" "$CI_COMMIT_REF_NAME"
+    - echo "Pipeline ID $CI_PIPELINE_ID"
+    - echo "Commit SHA $CI_COMMIT_SHA"
+    - echo "Runner $CI_RUNNER_DESCRIPTION"
 
 show_environment:
   script:
