@@ -1,20 +1,31 @@
 # Sample Dockerfile for testing the evergreen scanner
-FROM python:3.9.18-slim
-FROM node:18.17.0-alpine
-FROM nginx:1.24.0
-FROM redis:7.0.11-alpine
+# This file intentionally uses older versions to demonstrate updates
 
+# Multi-stage build example
+FROM node:16.20.0-alpine AS builder
+WORKDIR /build
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM python:3.9.16-slim AS app
 WORKDIR /app
-
-# Install dependencies
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Copy application code
-COPY . .
+FROM nginx:1.23.0 AS proxy
+COPY --from=builder /build/dist /usr/share/nginx/html
+COPY --from=app /app /var/www/app
 
-# Expose port
-EXPOSE 8000
+# Additional base images for testing
+FROM redis:7.0.10-alpine AS redis
+FROM postgres:14.7-alpine AS database
 
-# Run the application
-CMD ["python", "app.py"]
+# Expose ports
+EXPOSE 80 443 5432 6379
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost/ || exit 1
+
+# Default command
+CMD ["nginx", "-g", "daemon off;"]
