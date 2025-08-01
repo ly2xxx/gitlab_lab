@@ -120,24 +120,28 @@ curl --header "PRIVATE-TOKEN: YOUR_TOKEN" \
 - Configures Git with proper credentials
 - Uses OAuth2 authentication with ACCESS_TOKEN
 
-```yaml
-REPO_URL: "https://oauth2:${ACCESS_TOKEN}@${CI_PROJECT_URL#https://}.git"
+```bash
+REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
 ```
 
 #### 2. Update Images Stage (`update-docker-images`)
-- Scans for Dockerfiles in the project
-- Updates base image versions using sed commands
+- Checks out the feature branch created in the setup stage
+- Shows current branch and Dockerfile content for debugging
+- Updates base image versions using sed commands (python:3.9-slim → python:3.11-slim)
 - Creates sample files if none exist
+- Stages changes and sets CHANGES_MADE flag based on actual staged changes
 
 #### 3. Commit Changes Stage (`commit-changes`)
-- Commits modified files with descriptive messages
+- Checks out the feature branch and verifies staged changes exist
+- Commits modified files with descriptive multi-line messages
 - Pushes to feature branch with `ci.skip` to prevent loops
-- Only runs if changes are detected
+- Only runs if changes are detected (skips if no staged changes)
 
 #### 4. Create Merge Request Stage (`create-merge-request`)
-- Uses GitLab API to create merge requests automatically
-- Includes detailed descriptions and metadata
-- Assigns the MR to the triggering user
+- Only runs if CHANGES_MADE=true from previous stage
+- Uses GitLab API with proper JSON formatting to create merge requests
+- Includes concise description and pipeline metadata
+- Automatically sets remove_source_branch flag for cleanup
 
 ### Security Features
 
@@ -145,7 +149,8 @@ REPO_URL: "https://oauth2:${ACCESS_TOKEN}@${CI_PROJECT_URL#https://}.git"
 The pipeline uses GitLab's OAuth2 authentication method:
 
 ```bash
-git remote set-url origin "https://oauth2:${ACCESS_TOKEN}@${CI_PROJECT_URL#https://}.git"
+REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
+git remote set-url origin "${REPO_URL}"
 ```
 
 This approach is recommended over SSH keys for CI/CD environments because:
@@ -204,7 +209,7 @@ After a successful pipeline run:
 Pipeline ID: 123456
 Feature Branch: feature/update-base-images-123456
 Changes: 
-  - sample-app/Dockerfile: python:3.9 → python:3.11
+  - sample-app/Dockerfile: python:3.9-slim → python:3.11-slim
 Merge Request: !42 - "chore: update Docker base images (automated)"
 ```
 ![1754089874080](image/README/1754089874080.png)
@@ -250,6 +255,27 @@ Pipeline keeps triggering itself
 - Verify GITLAB_USER_ID is set correctly
 - Check if a MR already exists for the branch
 - Ensure proper API permissions
+
+#### 5. curl Command Syntax Errors
+```
+curl: option -: is unknown
+```
+
+**Solution**:
+- Check JSON formatting in curl command data payload
+- Ensure multi-line strings are properly escaped
+- Verify variable expansion doesn't break JSON structure
+- Use proper double quotes and escaping: `\"field\": \"${VAR}\"`
+
+#### 6. No Changes Detected
+```
+No changes made to Dockerfile
+```
+
+**Solution**:
+- Verify sed patterns match actual file content (e.g., `python:3.9-slim` not `python:3.9`)
+- Check file paths are correct relative to working directory
+- Ensure the target branch has the expected files
 
 ## Conclusion
 
