@@ -207,6 +207,7 @@ Changes:
   - sample-app/Dockerfile: python:3.9 → python:3.11
 Merge Request: !42 - "chore: update Docker base images (automated)"
 ```
+![1754089874080](image/README/1754089874080.png)
 
 ## Troubleshooting
 
