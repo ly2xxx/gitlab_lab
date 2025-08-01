@@ -17,8 +17,8 @@ setup_environment:
   stage: prepare
   script:
     - echo "=== Setting up build environment ==="
-    - echo "App: $APP_NAME"
-    - echo "Build directory: $BUILD_DIR"
+    - echo "App" $APP_NAME
+    - echo "Build directory" $BUILD_DIR
     - echo "Creating directories..."
     - mkdir -p $BUILD_DIR artifacts logs
     - echo "Directories created:"
@@ -29,7 +29,7 @@ check_dependencies:
   stage: prepare
   script:
     - echo "=== Checking system dependencies ==="
-    - echo "Git version: $(git --version)"
+    - echo "Git version" $(git --version)
     - echo "Available disk space:"
     - df -h 2>/dev/null || echo "df command not available"
     - echo "Memory info:"
@@ -41,15 +41,16 @@ compile_app:
   stage: build
   script:
     - echo "=== Compiling application ==="
-    - echo "Build started at: $(date)"
+    - echo "Build started at" $(date)
     - echo "Simulating compilation process..."
     - sleep 3  # Simulate build time
     - echo "Creating build artifacts..."
-    - echo "App: $APP_NAME" > $BUILD_DIR/app.txt
-    - echo "Version: 1.0.0" >> $BUILD_DIR/app.txt
-    - echo "Build Date: $(date)" >> $BUILD_DIR/app.txt
+    - mkdir -p $BUILD_DIR
+    - echo "App" $APP_NAME > $BUILD_DIR/app.txt
+    - echo "Version 1.0.0" >> $BUILD_DIR/app.txt
+    - echo "Build Date" $(date) >> $BUILD_DIR/app.txt
     - echo "Build complete!" >> $BUILD_DIR/app.txt
-    - echo "Build finished at: $(date)"
+    - echo "Build finished at" $(date)
     - echo "Artifacts created:"
     - ls -la $BUILD_DIR/
   artifacts:
@@ -73,8 +74,8 @@ build_documentation:
     - echo "## Overview" >> $BUILD_DIR/docs/README.md
     - echo "This is the documentation for $APP_NAME." >> $BUILD_DIR/docs/README.md
     - echo "" >> $BUILD_DIR/docs/README.md
-    - echo "Generated on: $(date)" >> $BUILD_DIR/docs/README.md
-    - echo "Pipeline: $CI_PIPELINE_ID" >> $BUILD_DIR/docs/README.md
+    - echo "Generated on" $(date) >> $BUILD_DIR/docs/README.md
+    - echo "Pipeline" $CI_PIPELINE_ID >> $BUILD_DIR/docs/README.md
     - echo "Documentation build complete!"
     - echo "Documentation files:"
     - ls -la $BUILD_DIR/docs/
@@ -92,7 +93,8 @@ unit_tests:
   script:
     - echo "=== Running unit tests ==="
     - echo "Testing build artifact availability..."
-    - if [ -f "$BUILD_DIR/app.txt" ]; then
+    - |
+      if [ -f "$BUILD_DIR/app.txt" ]; then
         echo "✓ Build artifact found"
         echo "Content:"
         cat $BUILD_DIR/app.txt
@@ -152,11 +154,11 @@ deploy_staging:
     - sleep 3
     - echo "✓ Application deployed successfully to staging!"
     - echo "📋 Deployment Summary:"
-    - echo "   Environment: Staging"
-    - echo "   URL: https://staging.example.com"
-    - echo "   Version: 1.0.0"
-    - echo "   Pipeline: $CI_PIPELINE_ID"
-    - echo "   Commit: $CI_COMMIT_SHORT_SHA"
+    - echo "   Environment- Staging"
+    - echo "   URL- https://staging.example.com"
+    - echo "   Version- 1.0.0"
+    - echo "   Pipeline" $CI_PIPELINE_ID
+    - echo "   Commit" $CI_COMMIT_SHORT_SHA
   environment:
     name: staging
     url: https://staging.example.com
