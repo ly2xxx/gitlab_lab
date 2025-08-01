@@ -10,34 +10,35 @@ stages:
 variables:
   # Feature branch name with timestamp for uniqueness
   FEATURE_BRANCH: "feature/update-base-images-${CI_PIPELINE_ID}"
-  # Repository URL for OAuth2 authentication
-  REPO_URL: "https://oauth2:${ACCESS_TOKEN}@${CI_PROJECT_URL#https://}.git"
   # Target base branch
   BASE_BRANCH: "main"
 
-# Global before_script for Git configuration
-before_script:
-  - git config --global user.email "${GITLAB_USER_EMAIL:-ci@example.com}"
-  - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
-  - git config --global init.defaultBranch main
 
 # Job 1: Setup and create feature branch
 setup-branch:
   stage: setup
-  image: alpine/git:latest
+  image: alpine:latest
   rules:
     # Only run on main branch, exclude merge requests
     - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "merge_request_event"'
     # Manual trigger option
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
+  before_script:
+    - apk add --no-cache git
+    - git config --global user.email "${GITLAB_USER_EMAIL:-ci@example.com}"
+    - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
+    - git config --global init.defaultBranch main
   script:
     - echo "Creating feature branch ${FEATURE_BRANCH}"
+    - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
+    - echo "Repository URL configured - $REPO_URL"
     - git remote set-url origin "${REPO_URL}"
     - git fetch origin
     - git checkout -b "${FEATURE_BRANCH}" origin/${BASE_BRANCH}
     - git push -u origin "${FEATURE_BRANCH}" -o ci.skip
     - echo "Feature branch created ${FEATURE_BRANCH}"
+    - echo "FEATURE_BRANCH=${FEATURE_BRANCH}" > branch.env
   artifacts:
     reports:
       dotenv: branch.env
@@ -60,6 +61,7 @@ update-docker-images:
     - apk add --no-cache git curl jq
     - git config --global user.email "${GITLAB_USER_EMAIL:-ci@example.com}"
     - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
+    - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
     - git remote set-url origin "${REPO_URL}"
   script:
     - echo "Checking out feature branch ${FEATURE_BRANCH}"
@@ -111,7 +113,7 @@ update-docker-images:
 # Job 3: Commit changes to feature branch
 commit-changes:
   stage: commit-changes
-  image: alpine/git:latest
+  image: alpine:latest
   needs: ["setup-branch", "update-docker-images"]
   dependencies:
     - setup-branch
@@ -120,7 +122,13 @@ commit-changes:
     - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "merge_request_event"'
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
+  before_script:
+    - apk add --no-cache git
+    - git config --global user.email "${GITLAB_USER_EMAIL:-ci@example.com}"
+    - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
+    - git config --global init.defaultBranch main
   script:
+    - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
     - git remote set-url origin "${REPO_URL}"
     - git fetch origin
     - git checkout "${FEATURE_BRANCH}"
@@ -206,12 +214,15 @@ create-merge-request:
 # Cleanup job - runs on failure to clean up feature branches
 cleanup-on-failure:
   stage: create-merge-request
-  image: alpine/git:latest
+  image: alpine:latest
   rules:
     - when: on_failure
+  before_script:
+    - apk add --no-cache git
   script:
     - git config --global user.email "${GITLAB_USER_EMAIL:-ci@example.com}"
     - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
+    - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
     - git remote set-url origin "${REPO_URL}"
     - git fetch origin
     - echo "Cleaning up feature branch ${FEATURE_BRANCH} due to pipeline failure"
