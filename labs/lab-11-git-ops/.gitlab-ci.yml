@@ -32,7 +32,7 @@ setup-branch:
   script:
     - echo "Creating feature branch ${FEATURE_BRANCH}"
     - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
-    - echo "Repository URL configured - $REPO_URL"
+    - echo "Repository URL configured - ${REPO_URL}"
     - git remote set-url origin "${REPO_URL}"
     - git fetch origin
     - git checkout -b "${FEATURE_BRANCH}" origin/${BASE_BRANCH}
