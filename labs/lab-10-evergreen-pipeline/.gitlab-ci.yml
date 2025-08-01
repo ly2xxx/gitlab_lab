@@ -1,0 +1,301 @@
+# GitLab CI Pipeline for Evergreen Scanner Integration
+# This example shows how to integrate the evergreen scanner with GitLab CI
+
+stages:
+  - validate
+  - test
+  - scan
+  - deploy
+
+variables:
+  # Python version for scanner
+  PYTHON_VERSION: "3.11"
+  
+  # Scanner configuration
+  SCANNER_CONFIG_FILE: "config.yaml"
+  LOG_LEVEL: "INFO"
+  
+  # Docker registry settings
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# Template for Python jobs
+.python_template: &python_template
+  image: python:${PYTHON_VERSION}-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git
+    - pip install --upgrade pip
+    - pip install -r labs/lab-10-evergreen-pipeline/requirements.txt
+  cache:
+    paths:
+      - .pip-cache/
+    key: 
+      files:
+        - labs/lab-10-evergreen-pipeline/requirements.txt
+
+# Validate configuration and Dockerfile syntax
+validate:config:
+  <<: *python_template
+  stage: validate
+  script:
+    - cd labs/lab-10-evergreen-pipeline
+    - |
+      if [ -f "config.yaml" ]; then
+        echo "✅ Configuration file found"
+        python -c "
+        import yaml
+        try:
+            with open('config.yaml', 'r') as f:
+                config = yaml.safe_load(f)
+            print('✅ Configuration is valid YAML')
+        except Exception as e:
+            print(f'❌ Configuration error: {e}')
+            exit(1)
+        "
+      else
+        echo "⚠️  Using default configuration"
+      fi
+    - echo "✅ Configuration validation completed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Run unit tests
+test:scanner:
+  <<: *python_template
+  stage: test
+  script:
+    - cd labs/lab-10-evergreen-pipeline
+    - echo "🧪 Running scanner unit tests..."
+    - python -m pytest test_scanner.py -v --cov=evergreen_scanner --cov-report=term-missing
+    - echo "✅ Unit tests completed"
+  coverage: '/TOTAL.+?(\d+%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: labs/lab-10-evergreen-pipeline/coverage.xml
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Test Docker Hub API connectivity
+test:docker_hub_api:
+  <<: *python_template
+  stage: test
+  script:
+    - cd labs/lab-10-evergreen-pipeline
+    - echo "🐳 Testing Docker Hub API connectivity..."
+    - python -c "
+      from evergreen_scanner import DockerHubAPI
+      api = DockerHubAPI()
+      try:
+          result = api.get_latest_tag('alpine')
+          print(f'✅ Docker Hub API test passed: alpine latest = {result}')
+      except Exception as e:
+          print(f'❌ Docker Hub API test failed: {e}')
+          exit(1)
+      "
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: true  # Don't fail pipeline if Docker Hub is temporarily unavailable
+
+# Scheduled dependency scan
+scan:evergreen:
+  <<: *python_template
+  stage: scan
+  script:
+    - cd labs/lab-10-evergreen-pipeline
+    - echo "🔍 Running evergreen dependency scan..."
+    - |
+      # Set up configuration for CI environment
+      export GITLAB_URL="${CI_SERVER_URL}"
+      export GITLAB_ACCESS_TOKEN="${EVERGREEN_ACCESS_TOKEN}"
+      export GITLAB_PROJECT_PATH="${CI_PROJECT_PATH}"
+      export LOG_LEVEL="DEBUG"
+      
+      # Run single scan (no scheduling in CI)
+      python enhanced_evergreen_scheduler.py --once --config config.yaml.example
+      
+      echo "✅ Evergreen scan completed"
+  rules:
+    # Run on scheduled pipelines (set up schedule in GitLab UI)
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables:
+        SCAN_TYPE: "scheduled"
+    # Allow manual trigger
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+      allow_failure: true
+      variables:
+        SCAN_TYPE: "manual"
+  artifacts:
+    paths:
+      - labs/lab-10-evergreen-pipeline/logs/
+    expire_in: 1 week
+    when: always
+
+# Deploy scanner as a service (for self-hosted runners)
+deploy:scanner_service:
+  image: docker:latest
+  stage: deploy
+  services:
+    - docker:dind
+  variables:
+    SCANNER_IMAGE: "${CI_REGISTRY_IMAGE}/evergreen-scanner:${CI_COMMIT_SHA}"
+  script:
+    - cd labs/lab-10-evergreen-pipeline
+    - echo "🚀 Building and deploying evergreen scanner service..."
+    
+    # Build Docker image for the scanner
+    - |
+      cat > Dockerfile.scanner << EOF
+      FROM python:3.11-slim
+      
+      WORKDIR /app
+      
+      # Install system dependencies
+      RUN apt-get update && apt-get install -y \
+          git \
+          && rm -rf /var/lib/apt/lists/*
+      
+      # Copy requirements and install Python dependencies
+      COPY requirements.txt .
+      RUN pip install --no-cache-dir -r requirements.txt
+      
+      # Copy scanner code
+      COPY *.py ./
+      COPY config.yaml.example ./config.yaml
+      
+      # Create logs directory
+      RUN mkdir -p logs
+      
+      # Set environment variables
+      ENV PYTHONPATH=/app
+      ENV LOG_LEVEL=INFO
+      
+      # Health check
+      HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+        CMD python -c "import requests; requests.get('http://localhost:8080/health').raise_for_status()" || exit 1
+      
+      # Run the enhanced scanner with scheduling
+      CMD ["python", "enhanced_evergreen_scheduler.py"]
+      EOF
+    
+    # Build and push image
+    - docker build -f Dockerfile.scanner -t $SCANNER_IMAGE .
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker push $SCANNER_IMAGE
+    
+    # Deploy using docker-compose (example)
+    - |
+      cat > docker-compose.scanner.yml << EOF
+      version: '3.8'
+      services:
+        evergreen-scanner:
+          image: ${SCANNER_IMAGE}
+          environment:
+            - GITLAB_URL=${CI_SERVER_URL}
+            - GITLAB_ACCESS_TOKEN=${EVERGREEN_ACCESS_TOKEN}
+            - GITLAB_PROJECT_PATH=${CI_PROJECT_PATH}
+            - SCHEDULER_ENABLED=true
+            - SCHEDULER_INTERVAL_HOURS=6
+            - WEBHOOK_ENABLED=true
+            - WEBHOOK_PORT=8080
+            - LOG_LEVEL=INFO
+          ports:
+            - "8080:8080"
+          volumes:
+            - scanner_logs:/app/logs
+            - ./config.yaml:/app/config.yaml:ro
+          restart: unless-stopped
+          healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 40s
+      
+      volumes:
+        scanner_logs:
+      EOF
+    
+    - echo "✅ Scanner service deployment configuration created"
+    - echo "To deploy: docker-compose -f docker-compose.scanner.yml up -d"
+    
+  artifacts:
+    paths:
+      - labs/lab-10-evergreen-pipeline/docker-compose.scanner.yml
+      - labs/lab-10-evergreen-pipeline/Dockerfile.scanner
+    expire_in: 1 month
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+  environment:
+    name: production
+    url: http://evergreen-scanner.example.com:8080/health
+
+# Notification job for scan results
+notify:scan_results:
+  image: alpine:latest
+  stage: .post
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - echo "📧 Sending scan result notifications..."
+    - |
+      # Example Slack notification
+      if [ ! -z "$SLACK_WEBHOOK_URL" ]; then
+        SCAN_STATUS="✅ Success"
+        if [ "$CI_JOB_STATUS" != "success" ]; then
+          SCAN_STATUS="❌ Failed"
+        fi
+        
+        curl -X POST -H 'Content-type: application/json' \
+          --data "{
+            \"text\": \"Evergreen Scanner Notification\",
+            \"attachments\": [{
+              \"color\": \"$([ '$CI_JOB_STATUS' = 'success' ] && echo 'good' || echo 'danger')\",
+              \"fields\": [
+                {\"title\": \"Project\", \"value\": \"$CI_PROJECT_NAME\", \"short\": true},
+                {\"title\": \"Branch\", \"value\": \"$CI_COMMIT_REF_NAME\", \"short\": true},
+                {\"title\": \"Status\", \"value\": \"$SCAN_STATUS\", \"short\": true},
+                {\"title\": \"Pipeline\", \"value\": \"$CI_PIPELINE_URL\", \"short\": false}
+              ]
+            }]
+          }" \
+          "$SLACK_WEBHOOK_URL"
+        echo "✅ Slack notification sent"
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: always
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: always
+  allow_failure: true
+
+# Cleanup old artifacts and logs
+cleanup:
+  image: alpine:latest
+  stage: .post
+  script:
+    - echo "🧹 Cleaning up old artifacts..."
+    - find labs/lab-10-evergreen-pipeline/logs -name "*.log" -mtime +7 -delete 2>/dev/null || true
+    - echo "✅ Cleanup completed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  allow_failure: true
+
+# Security scanning for the scanner itself
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+  - template: Security/License-Scanning.gitlab-ci.yml
+
+# Override SAST for Python
+sast:
+  variables:
+    SAST_EXCLUDED_PATHS: "spec, test, tests, tmp, labs/lab-10-evergreen-pipeline/sample-project"
