@@ -37,7 +37,7 @@ setup-branch:
     - git fetch origin
     - git checkout -b "${FEATURE_BRANCH}" origin/${BASE_BRANCH}
     - git push -u origin "${FEATURE_BRANCH}" -o ci.skip
-    - echo "Feature branch created: ${FEATURE_BRANCH}"
+    - echo "Feature branch created ${FEATURE_BRANCH}"
   artifacts:
     reports:
       dotenv: branch.env
