@@ -71,11 +71,13 @@ update-docker-images:
     # Update Python base image in sample-app/Dockerfile
     - |
       if [ -f "sample-app/Dockerfile" ]; then
+        echo "Current branch: $(git branch --show-current)"
         echo "Current Dockerfile content:"
         cat sample-app/Dockerfile
         
-        # Update Python base image version (example: python:3.9 -> python:3.11)
-        sed -i 's/FROM python:3\.9/FROM python:3.11/g' sample-app/Dockerfile
+        # Update Python base image version (example: python:3.9-slim -> python:3.11-slim)
+        echo "Running sed command to update Python base image..."
+        sed -i 's/FROM python:3\.9-slim/FROM python:3.11-slim/g' sample-app/Dockerfile
         
         # Update Node.js base image if present
         sed -i 's/FROM node:16/FROM node:18/g' sample-app/Dockerfile
@@ -89,7 +91,6 @@ update-docker-images:
         # Check if any changes were made
         if git diff --quiet; then
           echo "No changes made to Dockerfile"
-          exit 0
         else
           echo "Changes detected in Dockerfile"
         fi
@@ -100,9 +101,16 @@ update-docker-images:
         ./scripts/create-sample-files.sh
       fi
     
-    # Stage changes
+    # Stage changes and check if we have any modifications
     - git add .
-    - echo "CHANGES_MADE=true" >> changes.env
+    - |
+      if git diff --staged --quiet; then
+        echo "No staged changes to commit"
+        echo "CHANGES_MADE=false" >> changes.env
+      else
+        echo "Changes staged successfully"
+        echo "CHANGES_MADE=true" >> changes.env
+      fi
   artifacts:
     reports:
       dotenv: changes.env
@@ -182,31 +190,16 @@ create-merge-request:
     
     # Create merge request using GitLab API
     - |
-      MR_TITLE="chore: update Docker base images (automated)"
-      MR_DESCRIPTION="This merge request was automatically created by GitLab CI/CD pipeline.
-      
-      ## Changes Made
-      - Updated Docker base image versions in Dockerfiles
-      - Ensured compatibility with latest image versions
-      
-      ## Pipeline Info
-      - Pipeline ID: ${CI_PIPELINE_ID}
-      - Commit SHA: ${CI_COMMIT_SHA}
-      - Triggered by: ${GITLAB_USER_NAME}
-      
-      Please review the changes before merging."
-      
       curl --request POST \
         --header "PRIVATE-TOKEN: ${ACCESS_TOKEN}" \
         --header "Content-Type: application/json" \
-        --data '{
-          "source_branch": "'${FEATURE_BRANCH}'",
-          "target_branch": "'${BASE_BRANCH}'",
-          "title": "'${MR_TITLE}'",
-          "description": "'${MR_DESCRIPTION}'",
-          "remove_source_branch": true,
-          "assignee_id": "'${GITLAB_USER_ID}'"
-        }' \
+        --data "{
+          \"source_branch\": \"${FEATURE_BRANCH}\",
+          \"target_branch\": \"${BASE_BRANCH}\",
+          \"title\": \"chore: update Docker base images (automated)\",
+          \"description\": \"This merge request was automatically created by GitLab CI/CD pipeline ${CI_PIPELINE_ID}. Updated Docker base image versions in Dockerfiles.\",
+          \"remove_source_branch\": true
+        }" \
         "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests"
     
     - echo "Merge request created for ${FEATURE_BRANCH} -> ${BASE_BRANCH}"
