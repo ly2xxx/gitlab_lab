@@ -1,0 +1,222 @@
+# Lab 11: Git Branch Operations from Pipeline
+# Demonstrates feature branch creation, code modification, and merge requests
+
+stages:
+  - setup
+  - update-images
+  - commit-changes
+  - create-merge-request
+
+variables:
+  # Feature branch name with timestamp for uniqueness
+  FEATURE_BRANCH: "feature/update-base-images-${CI_PIPELINE_ID}"
+  # Target base branch
+  BASE_BRANCH: "main"
+
+
+# Job 1: Setup and create feature branch
+setup-branch:
+  stage: setup
+  image: alpine:latest
+  rules:
+    # Only run on main branch, exclude merge requests
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    # Manual trigger option
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  before_script:
+    - apk add --no-cache git
+    - git config --global user.email "${GITLAB_USER_EMAIL:-ci@example.com}"
+    - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
+    - git config --global init.defaultBranch main
+  script:
+    - echo "Creating feature branch ${FEATURE_BRANCH}"
+    - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
+    - echo "Repository URL configured - ${REPO_URL}"
+    - git remote set-url origin "${REPO_URL}"
+    - git fetch origin
+    - git checkout -b "${FEATURE_BRANCH}" origin/${BASE_BRANCH}
+    - git push -u origin "${FEATURE_BRANCH}" -o ci.skip
+    - echo "Feature branch created ${FEATURE_BRANCH}"
+    - echo "FEATURE_BRANCH=${FEATURE_BRANCH}" > branch.env
+  artifacts:
+    reports:
+      dotenv: branch.env
+    paths:
+      - branch.env
+    expire_in: 1 hour
+
+# Job 2: Update Docker base images
+update-docker-images:
+  stage: update-images
+  image: alpine:latest
+  needs: ["setup-branch"]
+  dependencies:
+    - setup-branch
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  before_script:
+    - apk add --no-cache git curl jq
+    - git config --global user.email "${GITLAB_USER_EMAIL:-ci@example.com}"
+    - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
+    - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
+    - git remote set-url origin "${REPO_URL}"
+  script:
+    - echo "Checking out feature branch ${FEATURE_BRANCH}"
+    - git fetch origin
+    - git checkout "${FEATURE_BRANCH}"
+    
+    # Update Python base image in sample-app/Dockerfile
+    - |
+      if [ -f "sample-app/Dockerfile" ]; then
+        echo "Current branch: $(git branch --show-current)"
+        echo "Current Dockerfile content:"
+        cat sample-app/Dockerfile
+        
+        # Update Python base image version (example: python:3.9-slim -> python:3.11-slim)
+        echo "Running sed command to update Python base image..."
+        sed -i 's/FROM python:3\.9-slim/FROM python:3.11-slim/g' sample-app/Dockerfile
+        
+        # Update Node.js base image if present
+        sed -i 's/FROM node:16/FROM node:18/g' sample-app/Dockerfile
+        
+        # Update Alpine base image if present
+        sed -i 's/FROM alpine:3\.15/FROM alpine:3.18/g' sample-app/Dockerfile
+        
+        echo "Updated Dockerfile content:"
+        cat sample-app/Dockerfile
+        
+        # Check if any changes were made
+        if git diff --quiet; then
+          echo "No changes made to Dockerfile"
+        else
+          echo "Changes detected in Dockerfile"
+        fi
+      else
+        echo "No Dockerfile found, creating sample files"
+        mkdir -p sample-app scripts
+        chmod +x scripts/create-sample-files.sh
+        ./scripts/create-sample-files.sh
+      fi
+    
+    # Stage changes and check if we have any modifications
+    - git add .
+    - |
+      if git diff --staged --quiet; then
+        echo "No staged changes to commit"
+        echo "CHANGES_MADE=false" >> changes.env
+      else
+        echo "Changes staged successfully"
+        echo "CHANGES_MADE=true" >> changes.env
+      fi
+  artifacts:
+    reports:
+      dotenv: changes.env
+    paths:
+      - changes.env
+    expire_in: 1 hour
+
+# Job 3: Commit changes to feature branch
+commit-changes:
+  stage: commit-changes
+  image: alpine:latest
+  needs: ["setup-branch", "update-docker-images"]
+  dependencies:
+    - setup-branch
+    - update-docker-images
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  before_script:
+    - apk add --no-cache git
+    - git config --global user.email "${GITLAB_USER_EMAIL:-ci@example.com}"
+    - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
+    - git config --global init.defaultBranch main
+  script:
+    - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
+    - git remote set-url origin "${REPO_URL}"
+    - git fetch origin
+    - git checkout "${FEATURE_BRANCH}"
+    
+    # Check if there are changes to commit
+    - |
+      if git diff --staged --quiet; then
+        echo "No staged changes to commit"
+        exit 0
+      fi
+    
+    # Create commit message
+    - |
+      COMMIT_MESSAGE="chore: update Docker base images
+      
+      - Updated Python base image version
+      - Updated Node.js base image version  
+      - Updated Alpine base image version
+      
+      Automated update via GitLab CI Pipeline ${CI_PIPELINE_ID}"
+    
+    # Commit changes
+    - git commit -m "${COMMIT_MESSAGE}"
+    
+    # Push to feature branch with ci.skip to prevent infinite loops
+    - git push origin "${FEATURE_BRANCH}" -o ci.skip
+    
+    - echo "Changes committed and pushed to ${FEATURE_BRANCH}"
+
+# Job 4: Create merge request
+create-merge-request:
+  stage: create-merge-request
+  image: alpine:latest
+  needs: ["setup-branch", "update-docker-images", "commit-changes"]
+  dependencies:
+    - setup-branch
+    - update-docker-images
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  before_script:
+    - apk add --no-cache curl jq git
+  script:
+    - |
+      # Only create MR if changes were made
+      if [ "${CHANGES_MADE}" != "true" ]; then
+        echo "No changes were made, skipping merge request creation"
+        exit 0
+      fi
+    
+    # Create merge request using GitLab API
+    - |
+      curl --request POST \
+        --header "PRIVATE-TOKEN: ${ACCESS_TOKEN}" \
+        --header "Content-Type: application/json" \
+        --data "{
+          \"source_branch\": \"${FEATURE_BRANCH}\",
+          \"target_branch\": \"${BASE_BRANCH}\",
+          \"title\": \"chore: update Docker base images (automated)\",
+          \"description\": \"This merge request was automatically created by GitLab CI/CD pipeline ${CI_PIPELINE_ID}. Updated Docker base image versions in Dockerfiles.\",
+          \"remove_source_branch\": true
+        }" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests"
+    
+    - echo "Merge request created for ${FEATURE_BRANCH} -> ${BASE_BRANCH}"
+
+# Cleanup job - runs on failure to clean up feature branches
+cleanup-on-failure:
+  stage: create-merge-request
+  image: alpine:latest
+  rules:
+    - when: on_failure
+  before_script:
+    - apk add --no-cache git
+  script:
+    - git config --global user.email "${GITLAB_USER_EMAIL:-ci@example.com}"
+    - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
+    - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
+    - git remote set-url origin "${REPO_URL}"
+    - git fetch origin
+    - echo "Cleaning up feature branch ${FEATURE_BRANCH} due to pipeline failure"
+    - git push origin --delete "${FEATURE_BRANCH}" || echo "Branch may not exist or already deleted"
