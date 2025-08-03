@@ -287,3 +287,6 @@ This lab provides a comprehensive foundation for automating git operations from 
 - Git best practices in CI/CD contexts
 
 By mastering these techniques, you can significantly reduce manual maintenance overhead and improve the reliability of your software delivery processes.
+
+![1754217301114](image/README/1754217301114.png)
+![1754217371239](image/README/1754217371239.png)

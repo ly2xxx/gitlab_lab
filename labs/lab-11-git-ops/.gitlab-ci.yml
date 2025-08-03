@@ -64,6 +64,8 @@ update-docker-images:
     - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
     - git remote set-url origin "${REPO_URL}"
   script:
+    # Clean up any artifact files that might conflict with git checkout
+    - rm -f branch.env changes.env
     - echo "Checking out feature branch ${FEATURE_BRANCH}"
     - git fetch origin
     - git checkout "${FEATURE_BRANCH}"
@@ -221,6 +223,20 @@ update-docker-images:
       else
         echo "Changes staged successfully"
         echo "CHANGES_MADE=true" >> changes.env
+        
+        # Commit the changes immediately in this job to ensure they persist
+        echo "Committing Dockerfile changes in update job"
+        git commit -m "chore: update Docker base images
+        
+        - Updated Python base image version
+        - Updated Node.js base image version  
+        - Updated Alpine base image version
+        
+        Automated update via GitLab CI Pipeline ${CI_PIPELINE_ID}"
+        
+        # Push the changes to the feature branch
+        git push origin "${FEATURE_BRANCH}" -o ci.skip
+        echo "Changes committed and pushed to ${FEATURE_BRANCH}"
       fi
   artifacts:
     reports:
@@ -247,19 +263,30 @@ commit-changes:
     - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
     - git config --global init.defaultBranch main
   script:
+    # Clean up any artifact files that might conflict with git checkout
+    - rm -f branch.env changes.env
     - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${ACCESS_TOKEN}'@|')"
     - git remote set-url origin "${REPO_URL}"
     - git fetch origin
     - git checkout "${FEATURE_BRANCH}"
     
-    # Check if there are changes to commit
+    # Check if changes were already committed in the update job
+    - |
+      if [ "${CHANGES_MADE}" = "true" ]; then
+        echo "Changes were already committed in the update-docker-images job"
+        echo "Skipping duplicate commit"
+        exit 0
+      fi
+    
+    # If for some reason changes weren't committed in update job, handle it here
+    - git add .
     - |
       if git diff --staged --quiet; then
         echo "No staged changes to commit"
         exit 0
       fi
     
-    # Create commit message
+    # Create commit message (fallback)
     - |
       COMMIT_MESSAGE="chore: update Docker base images
       
@@ -269,10 +296,10 @@ commit-changes:
       
       Automated update via GitLab CI Pipeline ${CI_PIPELINE_ID}"
     
-    # Commit changes
+    # Commit changes (fallback)
     - git commit -m "${COMMIT_MESSAGE}"
     
-    # Push to feature branch with ci.skip to prevent infinite loops
+    # Push to feature branch with ci.skip to prevent infinite loops (fallback)
     - git push origin "${FEATURE_BRANCH}" -o ci.skip
     
     - echo "Changes committed and pushed to ${FEATURE_BRANCH}"
