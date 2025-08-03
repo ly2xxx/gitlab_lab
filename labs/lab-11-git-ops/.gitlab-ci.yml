@@ -72,131 +72,81 @@ update-docker-images:
     
     # Update Docker base images in sample-app/Dockerfile
     - |
+      # Define reusable function for updating Docker base images
+      update_base_image() {
+        local image_name="$1"
+        local tag_filter="$2"
+        local sort_method="$3"
+        local display_name="$4"
+        local show_detailed_output="$5"
+        
+        echo "Querying Docker Hub API for latest $display_name image..."
+        local response=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/$image_name/tags/?page_size=100")
+        
+        if [ $? -eq 0 ] && [ -n "$response" ]; then
+          # Extract tags based on the filter pattern
+          local latest_tag=$(echo "$response" | grep -o '"name":"[^"]*"' | sed 's/"name":"//g' | sed 's/"//g' | grep -E "$tag_filter" | sort $sort_method | tail -1)
+          
+          if [ -n "$latest_tag" ]; then
+            echo "Latest $display_name tag found - $latest_tag"
+            local current_version=$(grep -oE "FROM $image_name:[^[:space:]]+" sample-app/Dockerfile | sed "s/FROM $image_name://" || echo "")
+            
+            if [ -n "$current_version" ]; then
+              echo "Current $display_name version - $current_version"
+              echo "Updating $display_name base image from $image_name:$current_version to $image_name:$latest_tag"
+              
+              # Show detailed output only for the first image (Python)
+              if [ "$show_detailed_output" = "true" ]; then
+                echo "=== Dockerfile content BEFORE update ==="
+                cat sample-app/Dockerfile
+                echo "=== END BEFORE ==="
+              fi
+              
+              # Escape special characters in version strings
+              local escaped_current=$(echo "$current_version" | sed 's/[[\.*^$()+?{|]/\\&/g')
+              local escaped_new=$(echo "$latest_tag" | sed 's/[[\.*^$()+?{|]/\\&/g')
+              
+              echo "Executing sed command for $display_name update"
+              sed -i "s/FROM $image_name:$escaped_current/FROM $image_name:$escaped_new/g" sample-app/Dockerfile
+              
+              # Show detailed output only for the first image (Python)
+              if [ "$show_detailed_output" = "true" ]; then
+                echo "=== Dockerfile content AFTER update ==="
+                cat sample-app/Dockerfile
+                echo "=== END AFTER ==="
+              fi
+              
+              # Verify the change was made
+              if grep -q "FROM $image_name:$latest_tag" sample-app/Dockerfile; then
+                echo "✓ $display_name base image successfully updated to $latest_tag"
+              else
+                echo "✗ ERROR: $display_name base image update failed"
+                grep "FROM $image_name:" sample-app/Dockerfile || echo "No $display_name FROM line found"
+              fi
+            else
+              echo "No $display_name base image found in Dockerfile"
+            fi
+          else
+            echo "Could not parse $display_name tags from API response"
+          fi
+        else
+          echo "Could not fetch $display_name tags from Docker Hub API, keeping current version"
+        fi
+      }
+
       if [ -f "sample-app/Dockerfile" ]; then
         echo "Current branch: $(git branch --show-current)"
         echo "Current Dockerfile content:"
         cat sample-app/Dockerfile
         
-        # Query Docker Hub API for latest Python slim image
-        echo "Querying Docker Hub API for latest Python slim image..."
-        PYTHON_RESPONSE=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/python/tags/?page_size=100")
-        if [ $? -eq 0 ] && [ -n "$PYTHON_RESPONSE" ]; then
-          # Extract slim tags using grep and sed, then sort to get latest
-          PYTHON_TAGS=$(echo "$PYTHON_RESPONSE" | grep -o '"name":"[^"]*-slim"' | sed 's/"name":"//g' | sed 's/"//g' | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?-slim$' | sort -V | tail -1)
-          
-          if [ -n "$PYTHON_TAGS" ]; then
-            echo "Latest Python slim tag found - $PYTHON_TAGS"
-            CURRENT_PYTHON=$(grep -oE 'FROM python:[^[:space:]]+' sample-app/Dockerfile | sed 's/FROM python://' || echo "")
-            if [ -n "$CURRENT_PYTHON" ]; then
-              echo "Current Python version - $CURRENT_PYTHON"
-              echo "Updating Python base image from python:$CURRENT_PYTHON to python:$PYTHON_TAGS"
-              
-              # Show content before change
-              echo "=== Dockerfile content BEFORE update ==="
-              cat sample-app/Dockerfile
-              echo "=== END BEFORE ==="
-              
-              # Escape special characters and perform replacement
-              ESCAPED_CURRENT=$(echo "$CURRENT_PYTHON" | sed 's/[[\.*^$()+?{|]/\\&/g')
-              ESCAPED_NEW=$(echo "$PYTHON_TAGS" | sed 's/[[\.*^$()+?{|]/\\&/g')
-              echo "Executing sed command for Python update"
-              sed -i "s/FROM python:$ESCAPED_CURRENT/FROM python:$ESCAPED_NEW/g" sample-app/Dockerfile
-              
-              # Show content after change and verify
-              echo "=== Dockerfile content AFTER update ==="
-              cat sample-app/Dockerfile
-              echo "=== END AFTER ==="
-              
-              # Verify the change was made
-              if grep -q "FROM python:$PYTHON_TAGS" sample-app/Dockerfile; then
-                echo "✓ Python base image successfully updated to $PYTHON_TAGS"
-              else
-                echo "✗ ERROR: Python base image update failed - still contains old version"
-                grep "FROM python:" sample-app/Dockerfile || echo "No Python FROM line found"
-              fi
-            else
-              echo "No Python base image found in Dockerfile"
-            fi
-          else
-            echo "Could not parse Python slim tags from API response"
-          fi
-        else
-          echo "Could not fetch Python tags from Docker Hub API, keeping current version"
-        fi
+        # Update Python slim image (with detailed output)
+        update_base_image "python" "^[0-9]+\.[0-9]+(\.[0-9]+)?-slim$" "-V" "Python slim" "true"
         
-        # Query Docker Hub API for latest Node.js LTS image
-        echo "Querying Docker Hub API for latest Node.js LTS image..."
-        NODE_RESPONSE=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/node/tags/?page_size=100")
-        if [ $? -eq 0 ] && [ -n "$NODE_RESPONSE" ]; then
-          # Extract numeric tags (LTS versions) and get the latest
-          NODE_TAGS=$(echo "$NODE_RESPONSE" | grep -o '"name":"[0-9][0-9]*"' | sed 's/"name":"//g' | sed 's/"//g' | sort -n | tail -1)
-          
-          if [ -n "$NODE_TAGS" ]; then
-            echo "Latest Node.js LTS tag found - $NODE_TAGS"
-            CURRENT_NODE=$(grep -oE 'FROM node:[^[:space:]]+' sample-app/Dockerfile | sed 's/FROM node://' || echo "")
-            if [ -n "$CURRENT_NODE" ]; then
-              echo "Current Node.js version - $CURRENT_NODE"
-              echo "Updating Node.js base image from node:$CURRENT_NODE to node:$NODE_TAGS"
-              
-              # Escape special characters and perform replacement
-              ESCAPED_CURRENT_NODE=$(echo "$CURRENT_NODE" | sed 's/[[\.*^$()+?{|]/\\&/g')
-              ESCAPED_NEW_NODE=$(echo "$NODE_TAGS" | sed 's/[[\.*^$()+?{|]/\\&/g')
-              echo "Executing sed command for Node.js update"
-              sed -i "s/FROM node:$ESCAPED_CURRENT_NODE/FROM node:$ESCAPED_NEW_NODE/g" sample-app/Dockerfile
-              
-              # Verify the change was made
-              if grep -q "FROM node:$NODE_TAGS" sample-app/Dockerfile; then
-                echo "✓ Node.js base image successfully updated to $NODE_TAGS"
-              else
-                echo "✗ ERROR: Node.js base image update failed"
-                grep "FROM node:" sample-app/Dockerfile || echo "No Node.js FROM line found"
-              fi
-            else
-              echo "No Node.js base image found in Dockerfile"
-            fi
-          else
-            echo "Could not parse Node.js tags from API response"
-          fi
-        else
-          echo "Could not fetch Node.js tags from Docker Hub API, keeping current version"
-        fi
+        # Update Node.js LTS image (numeric tags only)
+        update_base_image "node" "^[0-9]+$" "-n" "Node.js LTS" "false"
         
-        # Query Docker Hub API for latest Alpine image
-        echo "Querying Docker Hub API for latest Alpine image..."
-        ALPINE_RESPONSE=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/alpine/tags/?page_size=100")
-        if [ $? -eq 0 ] && [ -n "$ALPINE_RESPONSE" ]; then
-          # Extract version tags and get the latest
-          ALPINE_TAGS=$(echo "$ALPINE_RESPONSE" | grep -o '"name":"[0-9][^"]*"' | sed 's/"name":"//g' | sed 's/"//g' | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -1)
-          
-          if [ -n "$ALPINE_TAGS" ]; then
-            echo "Latest Alpine tag found - $ALPINE_TAGS"
-            CURRENT_ALPINE=$(grep -oE 'FROM alpine:[^[:space:]]+' sample-app/Dockerfile | sed 's/FROM alpine://' || echo "")
-            if [ -n "$CURRENT_ALPINE" ]; then
-              echo "Current Alpine version - $CURRENT_ALPINE"
-              echo "Updating Alpine base image from alpine:$CURRENT_ALPINE to alpine:$ALPINE_TAGS"
-              
-              # Escape special characters and perform replacement
-              ESCAPED_CURRENT_ALPINE=$(echo "$CURRENT_ALPINE" | sed 's/[[\.*^$()+?{|]/\\&/g')
-              ESCAPED_NEW_ALPINE=$(echo "$ALPINE_TAGS" | sed 's/[[\.*^$()+?{|]/\\&/g')
-              echo "Executing sed command for Alpine update"
-              sed -i "s/FROM alpine:$ESCAPED_CURRENT_ALPINE/FROM alpine:$ESCAPED_NEW_ALPINE/g" sample-app/Dockerfile
-              
-              # Verify the change was made
-              if grep -q "FROM alpine:$ALPINE_TAGS" sample-app/Dockerfile; then
-                echo "✓ Alpine base image successfully updated to $ALPINE_TAGS"
-              else
-                echo "✗ ERROR: Alpine base image update failed"
-                grep "FROM alpine:" sample-app/Dockerfile || echo "No Alpine FROM line found"
-              fi
-            else
-              echo "No Alpine base image found in Dockerfile"
-            fi
-          else
-            echo "Could not parse Alpine tags from API response"
-          fi
-        else
-          echo "Could not fetch Alpine tags from Docker Hub API, keeping current version"
-        fi
+        # Update Alpine image (version tags)
+        update_base_image "alpine" "^[0-9]+\.[0-9]+(\.[0-9]+)?$" "-V" "Alpine" "false"
         
         echo "Updated Dockerfile content"
         cat sample-app/Dockerfile
