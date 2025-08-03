@@ -83,12 +83,35 @@ update-docker-images:
           PYTHON_TAGS=$(echo "$PYTHON_RESPONSE" | grep -o '"name":"[^"]*-slim"' | sed 's/"name":"//g' | sed 's/"//g' | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?-slim$' | sort -V | tail -1)
           
           if [ -n "$PYTHON_TAGS" ]; then
-            echo "Latest Python slim tag found- $PYTHON_TAGS"
+            echo "Latest Python slim tag found - $PYTHON_TAGS"
             CURRENT_PYTHON=$(grep -oE 'FROM python:[^[:space:]]+' sample-app/Dockerfile | sed 's/FROM python://' || echo "")
             if [ -n "$CURRENT_PYTHON" ]; then
-              echo "Current Python version- $CURRENT_PYTHON"
-              echo "Updating Python base image to $PYTHON_TAGS"
-              sed -i "s|FROM python:${CURRENT_PYTHON}|FROM python:${PYTHON_TAGS}|g" sample-app/Dockerfile
+              echo "Current Python version - $CURRENT_PYTHON"
+              echo "Updating Python base image from python:$CURRENT_PYTHON to python:$PYTHON_TAGS"
+              
+              # Show content before change
+              echo "=== Dockerfile content BEFORE update ==="
+              cat sample-app/Dockerfile
+              echo "=== END BEFORE ==="
+              
+              # Escape special characters and perform replacement
+              ESCAPED_CURRENT=$(echo "$CURRENT_PYTHON" | sed 's/[[\.*^$()+?{|]/\\&/g')
+              ESCAPED_NEW=$(echo "$PYTHON_TAGS" | sed 's/[[\.*^$()+?{|]/\\&/g')
+              echo "Executing sed command for Python update"
+              sed -i "s/FROM python:$ESCAPED_CURRENT/FROM python:$ESCAPED_NEW/g" sample-app/Dockerfile
+              
+              # Show content after change and verify
+              echo "=== Dockerfile content AFTER update ==="
+              cat sample-app/Dockerfile
+              echo "=== END AFTER ==="
+              
+              # Verify the change was made
+              if grep -q "FROM python:$PYTHON_TAGS" sample-app/Dockerfile; then
+                echo "✓ Python base image successfully updated to $PYTHON_TAGS"
+              else
+                echo "✗ ERROR: Python base image update failed - still contains old version"
+                grep "FROM python:" sample-app/Dockerfile || echo "No Python FROM line found"
+              fi
             else
               echo "No Python base image found in Dockerfile"
             fi
@@ -107,12 +130,25 @@ update-docker-images:
           NODE_TAGS=$(echo "$NODE_RESPONSE" | grep -o '"name":"[0-9][0-9]*"' | sed 's/"name":"//g' | sed 's/"//g' | sort -n | tail -1)
           
           if [ -n "$NODE_TAGS" ]; then
-            echo "Latest Node.js LTS tag found- $NODE_TAGS"
+            echo "Latest Node.js LTS tag found - $NODE_TAGS"
             CURRENT_NODE=$(grep -oE 'FROM node:[^[:space:]]+' sample-app/Dockerfile | sed 's/FROM node://' || echo "")
             if [ -n "$CURRENT_NODE" ]; then
-              echo "Current Node.js version- $CURRENT_NODE"
-              echo "Updating Node.js base image to $NODE_TAGS"
-              sed -i "s|FROM node:${CURRENT_NODE}|FROM node:${NODE_TAGS}|g" sample-app/Dockerfile
+              echo "Current Node.js version - $CURRENT_NODE"
+              echo "Updating Node.js base image from node:$CURRENT_NODE to node:$NODE_TAGS"
+              
+              # Escape special characters and perform replacement
+              ESCAPED_CURRENT_NODE=$(echo "$CURRENT_NODE" | sed 's/[[\.*^$()+?{|]/\\&/g')
+              ESCAPED_NEW_NODE=$(echo "$NODE_TAGS" | sed 's/[[\.*^$()+?{|]/\\&/g')
+              echo "Executing sed command for Node.js update"
+              sed -i "s/FROM node:$ESCAPED_CURRENT_NODE/FROM node:$ESCAPED_NEW_NODE/g" sample-app/Dockerfile
+              
+              # Verify the change was made
+              if grep -q "FROM node:$NODE_TAGS" sample-app/Dockerfile; then
+                echo "✓ Node.js base image successfully updated to $NODE_TAGS"
+              else
+                echo "✗ ERROR: Node.js base image update failed"
+                grep "FROM node:" sample-app/Dockerfile || echo "No Node.js FROM line found"
+              fi
             else
               echo "No Node.js base image found in Dockerfile"
             fi
@@ -131,12 +167,25 @@ update-docker-images:
           ALPINE_TAGS=$(echo "$ALPINE_RESPONSE" | grep -o '"name":"[0-9][^"]*"' | sed 's/"name":"//g' | sed 's/"//g' | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -1)
           
           if [ -n "$ALPINE_TAGS" ]; then
-            echo "Latest Alpine tag found: $ALPINE_TAGS"
+            echo "Latest Alpine tag found - $ALPINE_TAGS"
             CURRENT_ALPINE=$(grep -oE 'FROM alpine:[^[:space:]]+' sample-app/Dockerfile | sed 's/FROM alpine://' || echo "")
             if [ -n "$CURRENT_ALPINE" ]; then
-              echo "Current Alpine version: $CURRENT_ALPINE"
-              echo "Updating Alpine base image to: alpine:$ALPINE_TAGS"
-              sed -i "s|FROM alpine:${CURRENT_ALPINE}|FROM alpine:${ALPINE_TAGS}|g" sample-app/Dockerfile
+              echo "Current Alpine version - $CURRENT_ALPINE"
+              echo "Updating Alpine base image from alpine:$CURRENT_ALPINE to alpine:$ALPINE_TAGS"
+              
+              # Escape special characters and perform replacement
+              ESCAPED_CURRENT_ALPINE=$(echo "$CURRENT_ALPINE" | sed 's/[[\.*^$()+?{|]/\\&/g')
+              ESCAPED_NEW_ALPINE=$(echo "$ALPINE_TAGS" | sed 's/[[\.*^$()+?{|]/\\&/g')
+              echo "Executing sed command for Alpine update"
+              sed -i "s/FROM alpine:$ESCAPED_CURRENT_ALPINE/FROM alpine:$ESCAPED_NEW_ALPINE/g" sample-app/Dockerfile
+              
+              # Verify the change was made
+              if grep -q "FROM alpine:$ALPINE_TAGS" sample-app/Dockerfile; then
+                echo "✓ Alpine base image successfully updated to $ALPINE_TAGS"
+              else
+                echo "✗ ERROR: Alpine base image update failed"
+                grep "FROM alpine:" sample-app/Dockerfile || echo "No Alpine FROM line found"
+              fi
             else
               echo "No Alpine base image found in Dockerfile"
             fi
@@ -147,7 +196,7 @@ update-docker-images:
           echo "Could not fetch Alpine tags from Docker Hub API, keeping current version"
         fi
         
-        echo "Updated Dockerfile content:"
+        echo "Updated Dockerfile content"
         cat sample-app/Dockerfile
         
         # Check if any changes were made
