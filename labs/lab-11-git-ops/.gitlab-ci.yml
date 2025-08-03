@@ -68,22 +68,84 @@ update-docker-images:
     - git fetch origin
     - git checkout "${FEATURE_BRANCH}"
     
-    # Update Python base image in sample-app/Dockerfile
+    # Update Docker base images in sample-app/Dockerfile
     - |
       if [ -f "sample-app/Dockerfile" ]; then
         echo "Current branch: $(git branch --show-current)"
         echo "Current Dockerfile content:"
         cat sample-app/Dockerfile
         
-        # Update Python base image version (example: python:3.9-slim -> python:3.11-slim)
-        echo "Running sed command to update Python base image..."
-        sed -i 's/FROM python:3\.9-slim/FROM python:3.11-slim/g' sample-app/Dockerfile
+        # Query Docker Hub API for latest Python slim image
+        echo "Querying Docker Hub API for latest Python slim image..."
+        PYTHON_RESPONSE=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/python/tags/?page_size=100")
+        if [ $? -eq 0 ] && [ -n "$PYTHON_RESPONSE" ]; then
+          # Extract slim tags using grep and sed, then sort to get latest
+          PYTHON_TAGS=$(echo "$PYTHON_RESPONSE" | grep -o '"name":"[^"]*-slim"' | sed 's/"name":"//g' | sed 's/"//g' | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?-slim$' | sort -V | tail -1)
+          
+          if [ -n "$PYTHON_TAGS" ]; then
+            echo "Latest Python slim tag found- $PYTHON_TAGS"
+            CURRENT_PYTHON=$(grep -oE 'FROM python:[^[:space:]]+' sample-app/Dockerfile | sed 's/FROM python://' || echo "")
+            if [ -n "$CURRENT_PYTHON" ]; then
+              echo "Current Python version- $CURRENT_PYTHON"
+              echo "Updating Python base image to $PYTHON_TAGS"
+              sed -i "s|FROM python:${CURRENT_PYTHON}|FROM python:${PYTHON_TAGS}|g" sample-app/Dockerfile
+            else
+              echo "No Python base image found in Dockerfile"
+            fi
+          else
+            echo "Could not parse Python slim tags from API response"
+          fi
+        else
+          echo "Could not fetch Python tags from Docker Hub API, keeping current version"
+        fi
         
-        # Update Node.js base image if present
-        sed -i 's/FROM node:16/FROM node:18/g' sample-app/Dockerfile
+        # Query Docker Hub API for latest Node.js LTS image
+        echo "Querying Docker Hub API for latest Node.js LTS image..."
+        NODE_RESPONSE=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/node/tags/?page_size=100")
+        if [ $? -eq 0 ] && [ -n "$NODE_RESPONSE" ]; then
+          # Extract numeric tags (LTS versions) and get the latest
+          NODE_TAGS=$(echo "$NODE_RESPONSE" | grep -o '"name":"[0-9][0-9]*"' | sed 's/"name":"//g' | sed 's/"//g' | sort -n | tail -1)
+          
+          if [ -n "$NODE_TAGS" ]; then
+            echo "Latest Node.js LTS tag found- $NODE_TAGS"
+            CURRENT_NODE=$(grep -oE 'FROM node:[^[:space:]]+' sample-app/Dockerfile | sed 's/FROM node://' || echo "")
+            if [ -n "$CURRENT_NODE" ]; then
+              echo "Current Node.js version- $CURRENT_NODE"
+              echo "Updating Node.js base image to $NODE_TAGS"
+              sed -i "s|FROM node:${CURRENT_NODE}|FROM node:${NODE_TAGS}|g" sample-app/Dockerfile
+            else
+              echo "No Node.js base image found in Dockerfile"
+            fi
+          else
+            echo "Could not parse Node.js tags from API response"
+          fi
+        else
+          echo "Could not fetch Node.js tags from Docker Hub API, keeping current version"
+        fi
         
-        # Update Alpine base image if present
-        sed -i 's/FROM alpine:3\.15/FROM alpine:3.18/g' sample-app/Dockerfile
+        # Query Docker Hub API for latest Alpine image
+        echo "Querying Docker Hub API for latest Alpine image..."
+        ALPINE_RESPONSE=$(curl -s "https://registry.hub.docker.com/v2/repositories/library/alpine/tags/?page_size=100")
+        if [ $? -eq 0 ] && [ -n "$ALPINE_RESPONSE" ]; then
+          # Extract version tags and get the latest
+          ALPINE_TAGS=$(echo "$ALPINE_RESPONSE" | grep -o '"name":"[0-9][^"]*"' | sed 's/"name":"//g' | sed 's/"//g' | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -1)
+          
+          if [ -n "$ALPINE_TAGS" ]; then
+            echo "Latest Alpine tag found: $ALPINE_TAGS"
+            CURRENT_ALPINE=$(grep -oE 'FROM alpine:[^[:space:]]+' sample-app/Dockerfile | sed 's/FROM alpine://' || echo "")
+            if [ -n "$CURRENT_ALPINE" ]; then
+              echo "Current Alpine version: $CURRENT_ALPINE"
+              echo "Updating Alpine base image to: alpine:$ALPINE_TAGS"
+              sed -i "s|FROM alpine:${CURRENT_ALPINE}|FROM alpine:${ALPINE_TAGS}|g" sample-app/Dockerfile
+            else
+              echo "No Alpine base image found in Dockerfile"
+            fi
+          else
+            echo "Could not parse Alpine tags from API response"
+          fi
+        else
+          echo "Could not fetch Alpine tags from Docker Hub API, keeping current version"
+        fi
         
         echo "Updated Dockerfile content:"
         cat sample-app/Dockerfile
