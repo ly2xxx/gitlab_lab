@@ -1,0 +1,162 @@
+# Lab 11: Git Branch Operations from Pipeline (Python Version)
+# Demonstrates feature branch creation, code modification, and merge requests using Python scripts
+
+stages:
+  - check
+  - setup-and-update
+  - commit-and-merge-request
+
+variables:
+  # Feature branch name with timestamp for uniqueness
+  FEATURE_BRANCH: "feature/update-base-images-${CI_PIPELINE_ID}"
+  # Target base branch
+  BASE_BRANCH: "main"
+  # Python version to use
+  PYTHON_VERSION: "3.11"
+
+# Common configuration for Python jobs
+.python-base: &python-base
+  image: python:${PYTHON_VERSION}-slim
+  before_script:
+    # Install system dependencies
+    - apt-get update && apt-get install -y git curl
+    # Install Python dependencies
+    - pip install --no-cache-dir requests
+    # Make Python scripts executable
+    - chmod +x python/*.py
+    # Add python directory to PATH for easier execution
+    - export PATH="${PWD}/python:${PATH}"
+
+# Job 1: Check if Docker image updates are needed
+check-updates:
+  stage: check
+  <<: *python-base
+  rules:
+    # Only run on main branch, exclude merge requests
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    # Manual trigger option
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  script:
+    - echo "🔍 Checking for Docker image updates using Python script..."
+    - python3 python/docker_image_checker.py
+  artifacts:
+    reports:
+      dotenv: updates.env
+    paths:
+      - updates.env
+    expire_in: 1 hour
+
+# Job 2: Setup branch and update Docker images (conditional)
+setup-and-update:
+  stage: setup-and-update
+  <<: *python-base
+  needs: ["check-updates"]
+  dependencies:
+    - check-updates
+  rules:
+    # Always run on main branch, exclude merge requests
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    # Manual trigger option
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  script:
+    - echo "🚀 Setting up branch and updating Docker images using Python script..."
+    - python3 python/git_operations.py setup
+  artifacts:
+    reports:
+      dotenv: [branch.env, changes.env]
+    paths:
+      - branch.env
+      - changes.env
+    expire_in: 1 hour
+
+# Job 3: Commit changes and create merge request (conditional)
+commit-and-merge-request:
+  stage: commit-and-merge-request
+  <<: *python-base
+  needs: ["check-updates", "setup-and-update"]
+  dependencies:
+    - check-updates
+    - setup-and-update
+  rules:
+    # Always run on main branch, exclude merge requests
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    # Manual trigger option
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  script:
+    - echo "📝 Creating merge request using Python script..."
+    - python3 python/gitlab_api.py create-mr
+
+# Cleanup job - runs on failure to clean up feature branches
+cleanup-on-failure:
+  stage: commit-and-merge-request
+  <<: *python-base
+  rules:
+    - when: on_failure
+  script:
+    - echo "🧹 Cleaning up on failure using Python script..."
+    - python3 python/git_operations.py cleanup
+
+# Optional utility jobs for debugging and testing
+
+# Test Python scripts locally (manual job)
+test-python-scripts:
+  stage: check
+  <<: *python-base
+  rules:
+    - when: manual
+      allow_failure: true
+  script:
+    - echo "🧪 Testing Python scripts..."
+    - echo "Testing Docker image checker..."
+    - python3 -c "from python.docker_image_checker import DockerImageChecker; from python.utils import Config; print('✓ Docker checker imports work')"
+    - echo "Testing GitLab API access..."
+    - python3 python/gitlab_api.py check-access || echo "GitLab API test failed (expected if no ACCESS_TOKEN)"
+    - echo "Testing file creator..."
+    - python3 python/file_creator.py || echo "File creator test completed"
+    - echo "✅ Python script tests completed"
+
+# Validate Python code syntax (manual job)
+validate-python-code:
+  stage: check
+  <<: *python-base
+  rules:
+    - when: manual
+      allow_failure: true
+  script:
+    - echo "🔍 Validating Python code syntax..."
+    - python3 -m py_compile python/*.py
+    - echo "✅ All Python files have valid syntax"
+
+# Show current Docker image versions (manual job)
+show-current-versions:
+  stage: check
+  <<: *python-base
+  rules:
+    - when: manual
+      allow_failure: true
+  script:
+    - echo "📋 Current Docker image versions..."
+    - |
+      if [ -f "sample-app/Dockerfile" ]; then
+        echo "Current Dockerfile content:"
+        cat sample-app/Dockerfile
+        echo ""
+        echo "FROM statements:"
+        grep "^FROM" sample-app/Dockerfile
+      else
+        echo "No Dockerfile found"
+      fi
+
+# List current merge requests (manual job)
+list-merge-requests:
+  stage: check
+  <<: *python-base
+  rules:
+    - when: manual
+      allow_failure: true
+  script:
+    - echo "📋 Listing current merge requests..."
+    - python3 python/gitlab_api.py list-mrs || echo "Failed to list MRs (may need ACCESS_TOKEN)"
