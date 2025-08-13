@@ -16,7 +16,13 @@
       "Bash(docker run:*)",
       "Bash(rm:*)",
       "Bash(sudo rm:*)",
-      "Bash(docker inspect:*)"
+      "Bash(docker inspect:*)",
+      "WebFetch(domain:docs.gitlab.com)",
+      "Bash(yamllint:*)",
+      "Bash(grep:*)",
+      "Bash(sed:*)",
+      "Bash(dos2unix:*)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }

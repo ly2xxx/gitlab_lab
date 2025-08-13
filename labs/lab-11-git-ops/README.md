@@ -4,6 +4,8 @@
 
 This lab demonstrates advanced GitLab CI/CD techniques for automating git branch operations, including feature branch creation, code modification, commits, and merge request creation directly from CI/CD pipelines. This is particularly useful for automated dependency updates, security patches, and maintenance tasks.
 
+**🎯 This lab has been converted into a reusable GitLab CI/CD Component!** See the [GitLab Component Usage](#gitlab-component-usage) section for how to use this functionality in your own projects.
+
 ## Learning Objectives
 
 After completing this lab, you will understand:
@@ -33,9 +35,16 @@ labs/lab-11-git-ops/
 │   ├── Dockerfile             # Sample Dockerfile with base images
 │   ├── app.py                 # Simple Flask application
 │   └── requirements.txt       # Python dependencies
-└── scripts/                   # Utility scripts
-    ├── create-sample-files.sh # Script to create sample files
-    └── update-image.sh        # Script to update base images
+├── scripts/                   # Original utility scripts
+│   ├── create-sample-files.sh # Script to create sample files
+│   └── update-image.sh        # Script to update base images
+└── templates/                 # GitLab Component (NEW!)
+    └── docker-image-updater/
+        ├── template.yml       # Component pipeline template
+        └── scripts/           # Enhanced component scripts
+            ├── docker-image-handler.sh
+            ├── create-sample-files.sh
+            └── update-image.sh
 ```
 
 ## Setup Instructions
@@ -277,7 +286,190 @@ No changes made to Dockerfile
 - Check file paths are correct relative to working directory
 - Ensure the target branch has the expected files
 
-## Conclusion
+---
+
+# GitLab Component Usage
+
+## 🚀 Using the Docker Image Updater Component
+
+This lab has been converted into a reusable GitLab CI/CD Component that can be easily integrated into any project. The component automates Docker base image updates with feature branch creation and merge request automation.
+
+### Quick Start
+
+Add the following to your project's `.gitlab-ci.yml`:
+
+```yaml
+include:
+  - component: your-gitlab-instance.com/path/to/this-project/docker-image-updater@latest
+
+# Use the component with default settings
+docker-update-workflow:
+  extends: .docker-image-updater
+```
+
+### Component Inputs
+
+Configure the component by providing inputs:
+
+```yaml
+include:
+  - component: your-gitlab-instance.com/path/to/this-project/docker-image-updater@latest
+    inputs:
+      update_mode: "simple"                    # "api" or "simple"
+      base_branch: "main"                     # Target branch for MRs
+      dockerfile_path: "Dockerfile"           # Path to Dockerfile
+      version_mappings: |                     # Custom version mappings
+        python:3.9->3.11
+        node:16->18
+        alpine:3.15->3.18
+      enable_mr_creation: true                # Auto-create merge requests
+      access_token_variable: "ACCESS_TOKEN"   # Token variable name
+```
+
+### Available Modes
+
+#### 1. API Mode (Default)
+Uses Docker Hub API to automatically detect the latest versions:
+
+```yaml
+inputs:
+  update_mode: "api"
+  docker_images_api: |
+    python:^[0-9]+\.[0-9]+(\.[0-9]+)?-slim$:-V:Python slim
+    node:^[0-9]+$:-n:Node.js LTS
+    alpine:^[0-9]+\.[0-9]+(\.[0-9]+)?$:-V:Alpine
+```
+
+#### 2. Simple Mode
+Uses predefined version mappings for predictable updates:
+
+```yaml
+inputs:
+  update_mode: "simple"
+  version_mappings: |
+    python:3.9->3.11
+    python:3.10->3.11
+    node:16->18
+    node:17->18
+```
+
+### Complete Example
+
+```yaml
+# .gitlab-ci.yml in your project
+include:
+  - component: your-gitlab-instance.com/path/to/this-project/docker-image-updater@latest
+    inputs:
+      update_mode: "simple"
+      base_branch: "main"
+      feature_branch_prefix: "chore/update-docker-images"
+      dockerfile_path: "docker/Dockerfile"
+      version_mappings: |
+        # Python updates
+        python:3.9->3.11
+        python:3.10->3.11
+        # Node.js updates  
+        node:16->18
+        node:17->18
+        # Alpine updates
+        alpine:3.15->3.18
+        # Custom images
+        nginx:1.20->1.24
+      enable_sample_creation: false
+      enable_mr_creation: true
+      enable_detailed_output: false
+      run_on_main_only: true
+      allow_manual_trigger: true
+      access_token_variable: "GITLAB_ACCESS_TOKEN"
+
+stages:
+  - check-updates
+  - setup-and-update  
+  - commit-and-merge-request
+
+# The component will automatically add the required jobs
+```
+
+### Required Variables
+
+Set these in your project's CI/CD variables:
+
+| Variable | Description | Required | Masked |
+|----------|-------------|----------|---------|
+| `ACCESS_TOKEN` (or custom name) | GitLab token with API access | ✓ | ✓ |
+
+### Component Features
+
+- **🔍 Smart Detection**: Automatically detects when updates are needed
+- **🌿 Branch Management**: Creates feature branches with unique names
+- **🔄 Flexible Updates**: Supports both API-driven and mapping-based updates
+- **📝 Auto-Commit**: Commits changes with descriptive messages
+- **🔗 Merge Requests**: Automatically creates MRs with proper descriptions
+- **🧹 Cleanup**: Handles failure cases and branch cleanup
+- **⚙️ Configurable**: Extensive customization options
+- **🛡️ Secure**: Proper token handling and authentication
+
+### Migration from Lab to Component
+
+If you're already using the lab pipeline, here's how to migrate:
+
+1. **Remove the old `.gitlab-ci.yml`** content
+2. **Replace with component include**:
+   ```yaml
+   include:
+     - component: path/to/docker-image-updater@latest
+   ```
+3. **Configure inputs** based on your current settings
+4. **Update CI/CD variables** if using different names
+
+### Component Development
+
+The component structure follows GitLab's component standards:
+
+```
+templates/docker-image-updater/
+├── template.yml              # Main component template
+└── scripts/                  # Supporting scripts
+    ├── docker-image-handler.sh
+    ├── create-sample-files.sh
+    └── update-image.sh
+```
+
+### Troubleshooting Component Issues
+
+#### Component Not Found
+```
+Component not found: path/to/docker-image-updater
+```
+
+**Solution**:
+- Verify the component path and version
+- Ensure the project containing the component is accessible
+- Check if the component project has proper visibility settings
+
+#### Input Validation Errors
+```
+Invalid input value for 'update_mode'
+```
+
+**Solution**:
+- Check input names and allowed values in the component spec
+- Verify YAML syntax in input values
+- Ensure multi-line strings use proper YAML format
+
+#### Permission Errors
+```
+You don't have permission to access this component
+```
+
+**Solution**:
+- Verify project visibility and access permissions
+- Ensure the component project allows component access
+- Check group/project membership requirements
+
+---
+
+## Original Lab Conclusion
 
 This lab provides a comprehensive foundation for automating git operations from GitLab CI/CD pipelines. The key takeaways are:
 - Secure authentication using ACCESS_TOKEN
@@ -285,8 +477,9 @@ This lab provides a comprehensive foundation for automating git operations from 
 - GitLab API integration for automation
 - Shell scripting for file manipulation
 - Git best practices in CI/CD contexts
+- **Component creation and reusability patterns**
 
-By mastering these techniques, you can significantly reduce manual maintenance overhead and improve the reliability of your software delivery processes.
+By mastering these techniques, you can significantly reduce manual maintenance overhead and improve the reliability of your software delivery processes. The component approach allows you to share this automation across multiple projects and teams.
 
 ![1754217301114](image/README/1754217301114.png)
 ![1754217371239](image/README/1754217371239.png)

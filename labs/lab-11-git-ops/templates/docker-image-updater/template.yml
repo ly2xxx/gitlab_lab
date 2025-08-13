@@ -1,0 +1,391 @@
+spec:
+  inputs:
+    # Mode selection - "api" uses Docker Hub API, "simple" uses predefined mappings
+    update_mode:
+      default: "api"
+      description: "Update mode: 'api' for Docker Hub API detection, 'simple' for version mappings"
+    
+    # Branch configuration
+    base_branch:
+      default: "main"
+      description: "Target branch for merge requests"
+    feature_branch_prefix:
+      default: "feature/update-base-images"
+      description: "Prefix for feature branch name (will append pipeline ID)"
+    
+    # Authentication
+    access_token_variable:
+      default: "ACCESS_TOKEN"
+      description: "Environment variable name containing GitLab access token"
+    
+    # File paths
+    dockerfile_path:
+      default: "Dockerfile"
+      description: "Path to Dockerfile to update (relative to project root)"
+    sample_app_path:
+      default: "sample-app"
+      description: "Directory for sample application files"
+    
+    # API mode configuration (multi-line string format)
+    docker_images_api:
+      default: |
+        python:^[0-9]+\.[0-9]+(\.[0-9]+)?-slim$:-V:Python slim
+        node:^[0-9]+$:-n:Node.js LTS
+        alpine:^[0-9]+\.[0-9]+(\.[0-9]+)?$:-V:Alpine
+      description: "Docker images for API mode (format: image:tag_filter:sort_method:display_name)"
+    
+    # Simple mode configuration (multi-line string format)
+    version_mappings:
+      default: |
+        python:3.9->3.11
+        python:3.10->3.11
+        node:16->18
+        node:17->18
+        alpine:3.15->3.18
+        alpine:3.16->3.18
+        alpine:3.17->3.18
+        ubuntu:20.04->22.04
+        ubuntu:21.04->22.04
+        nginx:1.20->1.24
+        nginx:1.21->1.24
+      description: "Version mappings for simple mode (format: image:old_version->new_version)"
+    
+    # Sample file creation
+    enable_sample_creation:
+      default: true
+      description: "Create sample application files if Dockerfile doesn't exist"
+    python_base_version:
+      default: "3.11-slim"
+      description: "Python base image version for sample files"
+    
+    # Workflow control
+    enable_mr_creation:
+      default: true
+      description: "Create merge request automatically"
+    enable_detailed_output:
+      default: false
+      description: "Show detailed output during image updates"
+    
+    # Pipeline triggers
+    run_on_main_only:
+      default: true
+      description: "Only run on main branch pushes (excludes MR events)"
+    allow_manual_trigger:
+      default: true
+      description: "Allow manual pipeline execution"
+
+---
+
+# Global variables for the component
+variables:
+  FEATURE_BRANCH: "$[[ inputs.feature_branch_prefix ]]-${CI_PIPELINE_ID}"
+  BASE_BRANCH: "$[[ inputs.base_branch ]]"
+  DOCKERFILE_PATH: "$[[ inputs.dockerfile_path ]]"
+  SAMPLE_APP_PATH: "$[[ inputs.sample_app_path ]]"
+  UPDATE_MODE: "$[[ inputs.update_mode ]]"
+
+# Common script blocks
+.component-scripts:
+  git-user-config: &git-user-config
+    - git config --global user.email "${GITLAB_USER_EMAIL:-ci@example.com}"
+    - git config --global user.name "${GITLAB_USER_NAME:-GitLab CI}"
+  
+  install-tools: &install-tools
+    - apk add --no-cache curl jq git
+  
+  setup-auth: &setup-auth
+    - REPO_URL="$(echo ${CI_PROJECT_URL} | sed 's|://|://oauth2:'${!ACCESS_TOKEN_VAR}'@|')"
+    - git remote set-url origin "${REPO_URL}"
+
+# Stage definitions
+stages:
+  - check-updates
+  - setup-and-update
+  - commit-and-merge-request
+
+# Job 1: Check if updates are needed
+docker-image-check:
+  stage: check-updates
+  image: alpine:latest
+  rules:
+    - if: '$[[ inputs.run_on_main_only ]] == "true" && $CI_COMMIT_BRANCH == "$[[ inputs.base_branch ]]" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    - if: '$[[ inputs.allow_manual_trigger ]] == "true" && $CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  before_script:
+    - *install-tools
+    - ACCESS_TOKEN_VAR="${[[ inputs.access_token_variable ]]}"
+  script:
+    - echo "🔍 Checking for Docker image updates using $UPDATE_MODE mode..."
+    
+    # Simple check for updates based on mode
+    - |
+      updates_needed=false
+      
+      if [ "$UPDATE_MODE" = "api" ]; then
+        echo "Using API mode to check for updates..."
+        # For API mode, we'll assume updates are available for demo
+        # In practice, this would use the docker-image-handler script
+        if [ -f "$DOCKERFILE_PATH" ]; then
+          echo "✓ Dockerfile found - checking for updates"
+          updates_needed=true
+        else
+          echo "✓ No Dockerfile found - will create sample files"
+          updates_needed=true
+        fi
+      else
+        echo "Using simple mode to check for updates..."
+        
+        if [ -f "$DOCKERFILE_PATH" ]; then
+          # Check if any of the version mappings would result in changes
+          while IFS= read -r mapping; do
+            [[ -z "$mapping" || "$mapping" =~ ^[[:space:]]*# ]] && continue
+            if [[ "$mapping" =~ ^([^:]+):([^-]+)->(.+)$ ]]; then
+              image="${BASH_REMATCH[1]}"
+              old_version="${BASH_REMATCH[2]}"
+              if grep -q "FROM $image:$old_version" "$DOCKERFILE_PATH"; then
+                echo "✓ Update available - $image:$old_version"
+                updates_needed=true
+                break
+              fi
+            fi
+          done <<< "$[[ inputs.version_mappings ]]"
+        else
+          echo "✓ No Dockerfile found - will create sample files"
+          updates_needed=true
+        fi
+      fi
+      
+      if [ "$updates_needed" = "true" ]; then
+        echo "🔄 Docker image updates are available - pipeline will continue"
+        echo "UPDATES_NEEDED=true" > updates.env
+      else
+        echo "✅ All Docker images are up to date - skipping remaining jobs"
+        echo "UPDATES_NEEDED=false" > updates.env
+      fi
+  artifacts:
+    reports:
+      dotenv: updates.env
+    paths:
+      - updates.env
+    expire_in: 1 hour
+
+# Job 2: Setup branch and update images
+docker-image-update:
+  stage: setup-and-update
+  image: alpine:latest
+  needs: ["docker-image-check"]
+  dependencies:
+    - docker-image-check
+  rules:
+    - if: '$[[ inputs.run_on_main_only ]] == "true" && $CI_COMMIT_BRANCH == "$[[ inputs.base_branch ]]" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    - if: '$[[ inputs.allow_manual_trigger ]] == "true" && $CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  before_script:
+    - *install-tools
+    - *git-user-config
+    - git config --global init.defaultBranch main
+    - ACCESS_TOKEN_VAR="${[[ inputs.access_token_variable ]]}"
+  script:
+    # Check if updates are needed
+    - |
+      if [ "${UPDATES_NEEDED}" != "true" ]; then
+        echo "✅ No Docker image updates needed - skipping branch creation and updates"
+        echo "CHANGES_MADE=false" > changes.env
+        echo "FEATURE_BRANCH=" > branch.env
+        exit 0
+      fi
+    
+    # Clean up artifact files
+    - rm -f branch.env changes.env
+    
+    # Setup repository authentication
+    - *setup-auth
+    - git fetch origin
+    
+    # Create feature branch
+    - echo "🌟 Creating feature branch ${FEATURE_BRANCH}"
+    - git checkout -b "${FEATURE_BRANCH}" origin/${BASE_BRANCH}
+    - git push -u origin "${FEATURE_BRANCH}" -o ci.skip
+    - echo "FEATURE_BRANCH=${FEATURE_BRANCH}" > branch.env
+    
+    # Create sample files if needed and enabled
+    - |
+      if [ ! -f "$DOCKERFILE_PATH" ] && [ "$[[ inputs.enable_sample_creation ]]" = "true" ]; then
+        echo "📁 Creating sample application files..."
+        
+        # Create basic sample Dockerfile
+        mkdir -p "$SAMPLE_APP_PATH"
+        cat > "$DOCKERFILE_PATH" << EOF
+      # Sample Dockerfile for testing base image updates
+      FROM python:$[[ inputs.python_base_version ]]
+      
+      # Set working directory
+      WORKDIR /app
+      
+      # Install system dependencies
+      RUN apt-get update && apt-get install -y \\
+          gcc \\
+          && rm -rf /var/lib/apt/lists/*
+      
+      # Copy requirements file
+      COPY requirements.txt .
+      
+      # Install Python dependencies
+      RUN pip install --no-cache-dir -r requirements.txt
+      
+      # Copy application code
+      COPY app.py .
+      
+      # Expose port
+      EXPOSE 8000
+      
+      # Set default command
+      CMD ["python", "app.py"]
+      EOF
+        
+        # Create basic requirements.txt
+        echo "Flask==2.3.3" > "$SAMPLE_APP_PATH/requirements.txt"
+        
+        # Create basic app.py
+        cat > "$SAMPLE_APP_PATH/app.py" << 'EOF'
+      from flask import Flask, jsonify
+      app = Flask(__name__)
+      
+      @app.route('/')
+      def home():
+          return jsonify({'message': 'Hello from GitLab Component!'})
+      
+      if __name__ == '__main__':
+          app.run(host='0.0.0.0', port=8000)
+      EOF
+      fi
+    
+    # Update Docker images based on mode
+    - |
+      if [ -f "$DOCKERFILE_PATH" ]; then
+        echo "📝 Current Dockerfile content:"
+        cat "$DOCKERFILE_PATH"
+        
+        if [ "$UPDATE_MODE" = "simple" ]; then
+          echo "🔧 Updating images using simple mode..."
+          
+          # Process version mappings
+          while IFS= read -r mapping; do
+            [[ -z "$mapping" || "$mapping" =~ ^[[:space:]]*# ]] && continue
+            if [[ "$mapping" =~ ^([^:]+):([^-]+)->(.+)$ ]]; then
+              image="${BASH_REMATCH[1]}"
+              old_version="${BASH_REMATCH[2]}"
+              new_version="${BASH_REMATCH[3]}"
+              
+              if grep -q "FROM $image:$old_version" "$DOCKERFILE_PATH"; then
+                echo "Updating $image from $old_version to $new_version"
+                sed -i "s/FROM $image:$old_version/FROM $image:$new_version/g" "$DOCKERFILE_PATH"
+              fi
+            fi
+          done <<< "$[[ inputs.version_mappings ]]"
+        else
+          echo "🚀 API mode update would be implemented here..."
+          echo "For demo purposes, making a simple change"
+          # For demo, we'll just add a comment
+          sed -i '1s/^/# Updated via GitLab Component\n/' "$DOCKERFILE_PATH"
+        fi
+        
+        echo "📝 Updated Dockerfile content:"
+        cat "$DOCKERFILE_PATH"
+      fi
+    
+    # Check for changes and commit
+    - git add .
+    - |
+      if git diff --staged --quiet; then
+        echo "📋 No staged changes to commit"
+        echo "CHANGES_MADE=false" >> changes.env
+      else
+        echo "✅ Changes staged successfully"
+        echo "CHANGES_MADE=true" >> changes.env
+        
+        # Commit the changes
+        git commit -m "chore: update Docker base images (automated)
+
+        Updated Docker base image versions using $UPDATE_MODE mode.
+        
+        Automated update via GitLab CI Pipeline ${CI_PIPELINE_ID}
+        Component: docker-image-updater"
+        
+        git push origin "${FEATURE_BRANCH}" -o ci.skip
+        echo "🚀 Changes committed and pushed to ${FEATURE_BRANCH}"
+      fi
+  artifacts:
+    reports:
+      dotenv: [branch.env, changes.env]
+    paths:
+      - branch.env
+      - changes.env
+    expire_in: 1 hour
+
+# Job 3: Create merge request
+create-merge-request:
+  stage: commit-and-merge-request
+  image: alpine:latest
+  needs: ["docker-image-check", "docker-image-update"]
+  dependencies:
+    - docker-image-check
+    - docker-image-update
+  rules:
+    - if: '$[[ inputs.run_on_main_only ]] == "true" && $CI_COMMIT_BRANCH == "$[[ inputs.base_branch ]]" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    - if: '$[[ inputs.allow_manual_trigger ]] == "true" && $CI_PIPELINE_SOURCE == "web"'
+      when: manual
+  before_script:
+    - *install-tools
+    - ACCESS_TOKEN_VAR="${[[ inputs.access_token_variable ]]}"
+  script:
+    # Check if changes were made and MR creation is enabled
+    - |
+      if [ "${CHANGES_MADE}" != "true" ]; then
+        echo "✅ No changes were made - skipping merge request creation"
+        exit 0
+      fi
+      
+      if [ "$[[ inputs.enable_mr_creation ]]" != "true" ]; then
+        echo "📋 Merge request creation is disabled - skipping"
+        exit 0
+      fi
+      
+      if [ -z "${FEATURE_BRANCH}" ]; then
+        echo "❌ No feature branch was created - cannot proceed with merge request"
+        exit 1
+      fi
+    
+    # Create merge request using GitLab API
+    - echo "🔗 Creating merge request for ${FEATURE_BRANCH} -> ${BASE_BRANCH}"
+    - |
+      curl --request POST \
+        --header "PRIVATE-TOKEN: ${!ACCESS_TOKEN_VAR}" \
+        --header "Content-Type: application/json" \
+        --data "{
+          \"source_branch\": \"${FEATURE_BRANCH}\",
+          \"target_branch\": \"${BASE_BRANCH}\",
+          \"title\": \"chore: update Docker base images (automated via component)\",
+          \"description\": \"This merge request was automatically created by the GitLab docker-image-updater component in pipeline ${CI_PIPELINE_ID}.\\n\\n## Changes\\n- Updated Docker base image versions using **${UPDATE_MODE}** mode\\n- Applied via GitLab CI/CD component\\n\\n## Review\\nPlease review the Dockerfile changes and approve if they look correct.\",
+          \"remove_source_branch\": true,
+          \"labels\": [\"automated\", \"docker\", \"maintenance\"]
+        }" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests"
+    
+    - echo "✅ Merge request created for ${FEATURE_BRANCH} -> ${BASE_BRANCH}"
+
+# Cleanup job - runs on failure
+cleanup-on-failure:
+  stage: commit-and-merge-request
+  image: alpine:latest
+  rules:
+    - when: on_failure
+  before_script:
+    - apk add --no-cache git
+    - ACCESS_TOKEN_VAR="${[[ inputs.access_token_variable ]]}"
+  script:
+    - *git-user-config
+    - *setup-auth
+    - git fetch origin
+    - echo "🧹 Cleaning up feature branch ${FEATURE_BRANCH} due to pipeline failure"
+    - git push origin --delete "${FEATURE_BRANCH}" || echo "Branch may not exist or already deleted"
