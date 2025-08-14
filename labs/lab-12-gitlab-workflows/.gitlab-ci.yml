@@ -137,6 +137,10 @@ generate-child-pipeline:
     - echo "After dos2unix and chmod..."
     - ls -lta ./
     - $CI_PROJECT_DIR/scripts/generate-child-pipeline.sh
+    - echo "Checking generated artifact..."
+    - ls -la $CI_PROJECT_DIR/generated-child-pipeline.yml
+    - echo "Artifact content preview:"
+    - head -20 $CI_PROJECT_DIR/generated-child-pipeline.yml
   artifacts:
     paths:
       - generated-child-pipeline.yml
@@ -173,6 +177,7 @@ trigger-dynamic-child:
       artifacts: true
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 # ============================================================================
 # MULTI-PROJECT PIPELINES SECTION

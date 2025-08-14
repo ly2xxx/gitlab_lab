@@ -7,7 +7,7 @@ set -e
 echo "🔧 Generating dynamic child pipeline configuration..."
 
 # Initialize the pipeline file
-PIPELINE_FILE="generated-child-pipeline.yml"
+PIPELINE_FILE="$CI_PROJECT_DIR/generated-child-pipeline.yml"
 
 # Start with basic structure
 cat > $PIPELINE_FILE << 'EOF'
