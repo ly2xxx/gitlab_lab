@@ -122,10 +122,21 @@ backend-build:
 # Generate dynamic child pipeline configuration
 generate-child-pipeline:
   stage: build
-  image: alpine:latest
+  image: ubuntu:latest
   script:
     - echo "📋 Generating dynamic child pipeline configuration"
-    - ./scripts/generate-child-pipeline.sh
+    - echo "Working directory- $(pwd)"
+    - echo "Project directory- $CI_PROJECT_DIR"
+    - ls -la $CI_PROJECT_DIR/
+    - cd $CI_PROJECT_DIR/scripts
+    - echo "Generating child pipeline configuration..."
+    - ls -lta ./
+    - apt-get update && apt-get install -y dos2unix
+    - dos2unix $CI_PROJECT_DIR/scripts/generate-child-pipeline.sh
+    - chmod +x $CI_PROJECT_DIR/scripts/generate-child-pipeline.sh
+    - echo "After dos2unix and chmod..."
+    - ls -lta ./
+    - $CI_PROJECT_DIR/scripts/generate-child-pipeline.sh
   artifacts:
     paths:
       - generated-child-pipeline.yml
@@ -217,7 +228,7 @@ flaky-integration-test:
   stage: test
   script:
     - echo "🔄 Running integration tests (may be flaky)"
-    - ./scripts/run-integration-tests.sh
+    - $CI_PROJECT_DIR/scripts/run-integration-tests.sh
   retry:
     max: 2
     when:
@@ -234,7 +245,7 @@ flaky-integration-test:
   script:
     - echo "🚀 Deploying to $DEPLOY_ENVIRONMENT"
     # - echo "Target URL: https://$DEPLOY_ENVIRONMENT.example.com"
-    - ./scripts/deploy.sh $DEPLOY_ENVIRONMENT
+    - $CI_PROJECT_DIR/scripts/deploy.sh $DEPLOY_ENVIRONMENT
   artifacts:
     reports:
       dotenv: deployment.env
