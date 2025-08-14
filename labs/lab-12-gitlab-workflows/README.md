@@ -240,6 +240,8 @@ graph LR
     E --> F[Notification]
 ```
 
+![1755211851311](image/README/1755211851311.png)
+
 ## Troubleshooting
 
 ### Common Issues
