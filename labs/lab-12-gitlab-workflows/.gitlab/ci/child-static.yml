@@ -12,9 +12,9 @@ variables:
 
 # Inherit variables from parent
 before_script:
-  - echo "🔗 Child Pipeline (Static) - ID: $CI_PIPELINE_ID"
-  - echo "📋 Parent Pipeline ID: $PARENT_PIPELINE_ID"
-  - echo "🎯 Child Type: $CHILD_TYPE"
+  - echo "🔗 Child Pipeline (Static) - ID- $CI_PIPELINE_ID"
+  - echo "📋 Parent Pipeline ID- $PARENT_PIPELINE_ID"
+  - echo "🎯 Child Type- $CHILD_TYPE"
 
 # Child pipeline validation
 child-validate-config:
@@ -22,8 +22,8 @@ child-validate-config:
   script:
     - echo "✅ Validating child pipeline configuration"
     - echo "Checking inherited variables..."
-    - echo "Parent Pipeline: $PARENT_PIPELINE_ID"
-    - echo "Child Type: $CHILD_TYPE"
+    - echo "Parent Pipeline- $PARENT_PIPELINE_ID"
+    - echo "Child Type- $CHILD_TYPE"
 
 # Build tasks specific to this child pipeline
 child-build-component-a:

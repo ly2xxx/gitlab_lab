@@ -25,17 +25,17 @@ variables:
   GENERATION_TIME: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 before_script:
-  - echo "🔗 Dynamic Child Pipeline - ID: $CI_PIPELINE_ID"
-  - echo "📋 Parent Pipeline ID: $PARENT_PIPELINE_ID"
-  - echo "⏰ Generated at: $GENERATION_TIME"
+  - echo "🔗 Dynamic Child Pipeline - ID- $CI_PIPELINE_ID"
+  - echo "📋 Parent Pipeline ID- $PARENT_PIPELINE_ID"
+  - echo "⏰ Generated at- $GENERATION_TIME"
 
 # Analysis job - always included
 dynamic-analyze-changes:
   stage: dynamic-analyze
   script:
     - echo "🔍 Analyzing changes for dynamic pipeline"
-    - echo "Commit SHA: $CI_COMMIT_SHA"
-    - echo "Branch: $CI_COMMIT_REF_NAME"
+    - echo "Commit SHA- $CI_COMMIT_SHA"
+    - echo "Branch- $CI_COMMIT_REF_NAME"
     - git diff --name-only HEAD~1 HEAD || echo "No previous commit to compare"
   artifacts:
     paths:
@@ -168,16 +168,16 @@ dynamic-pipeline-summary:
     - echo "📊 Dynamic Pipeline Summary"
     - echo "=============================="
     - echo "Pipeline Type: Dynamic Child"
-    - echo "Generated at: $GENERATION_TIME"
-    - echo "Parent Pipeline: $PARENT_PIPELINE_ID"
-    - echo "Child Pipeline: $CI_PIPELINE_ID"
+    - echo "Generated at- $GENERATION_TIME"
+    - echo "Parent Pipeline- $PARENT_PIPELINE_ID"
+    - echo "Child Pipeline- $CI_PIPELINE_ID"
     - echo "Changes analyzed and processed dynamically"
     - echo "✅ Dynamic pipeline completed successfully"
   rules:
     - when: always
 EOF
 
-echo "✅ Dynamic child pipeline configuration generated: $PIPELINE_FILE"
+echo "✅ Dynamic child pipeline configuration generated- $PIPELINE_FILE"
 echo "📄 Pipeline content:"
 echo "----------------------------------------"
 cat $PIPELINE_FILE

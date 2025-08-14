@@ -11,7 +11,7 @@ echo "🔄 This test may occasionally fail to demonstrate retry mechanisms"
 RANDOM_NUM=$(( RANDOM % 10 ))
 SHOULD_FAIL_RANDOMLY=$((RANDOM_NUM < 3))
 
-echo "🎲 Random factor: $RANDOM_NUM (fail if < 3)"
+echo "🎲 Random factor- $RANDOM_NUM (fail if < 3)"
 
 # Test configuration
 TESTS_TO_RUN=(
@@ -32,20 +32,20 @@ run_test() {
     local test_name=$1
     local test_duration=$(( (RANDOM % 3) + 1 ))
     
-    echo "▶️ Running test: $test_name"
+    echo "▶️ Running test- $test_name"
     sleep $test_duration
     
     # Simulate test logic with occasional failures
     if [ $SHOULD_FAIL_RANDOMLY -eq 1 ] && [ "$test_name" == "external_service_integration" ]; then
-        echo "❌ Test failed: $test_name (simulated network timeout)"
+        echo "❌ Test failed- $test_name (simulated network timeout)"
         FAILED_TESTS+=("$test_name")
         return 1
     elif [ $SHOULD_FAIL_RANDOMLY -eq 1 ] && [ "$test_name" == "message_queue_processing" ]; then
-        echo "❌ Test failed: $test_name (simulated queue overload)"
+        echo "❌ Test failed- $test_name (simulated queue overload)"
         FAILED_TESTS+=("$test_name")
         return 1
     else
-        echo "✅ Test passed: $test_name"
+        echo "✅ Test passed- $test_name"
         PASSED_TESTS+=("$test_name")
         return 0
     fi
@@ -69,10 +69,10 @@ DURATION=$((END_TIME - START_TIME))
 echo ""
 echo "📊 Integration Test Report"
 echo "=========================="
-echo "Total tests: ${#TESTS_TO_RUN[@]}"
-echo "Passed: ${#PASSED_TESTS[@]}"
-echo "Failed: ${#FAILED_TESTS[@]}"
-echo "Duration: ${DURATION}s"
+echo "Total tests- ${#TESTS_TO_RUN[@]}"
+echo "Passed- ${#PASSED_TESTS[@]}"
+echo "Failed- ${#FAILED_TESTS[@]}"
+echo "Duration- ${DURATION}s"
 echo ""
 
 if [ ${#PASSED_TESTS[@]} -gt 0 ]; then

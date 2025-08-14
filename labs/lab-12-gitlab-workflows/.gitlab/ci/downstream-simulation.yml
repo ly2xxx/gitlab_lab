@@ -13,9 +13,9 @@ variables:
 
 before_script:
   - echo "🔗 Downstream Pipeline Triggered"
-  - echo "📋 Upstream Project: $UPSTREAM_PROJECT"
-  - echo "🆔 Upstream Commit: $UPSTREAM_COMMIT"
-  - echo "🌍 Target Environment: $DEPLOYMENT_ENVIRONMENT"
+  - echo "📋 Upstream Project- $UPSTREAM_PROJECT"
+  - echo "🆔 Upstream Commit- $UPSTREAM_COMMIT"
+  - echo "🌍 Target Environment- $DEPLOYMENT_ENVIRONMENT"
 
 # Validate upstream information
 downstream-validate-trigger:

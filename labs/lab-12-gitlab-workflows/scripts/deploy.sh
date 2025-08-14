@@ -8,7 +8,7 @@ ENVIRONMENT=${1:-staging}
 TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)
 
 echo "🚀 Starting deployment to $ENVIRONMENT environment"
-echo "📅 Deployment timestamp: $TIMESTAMP"
+echo "📅 Deployment timestamp- $TIMESTAMP"
 
 # Function to simulate deployment steps
 deploy_step() {
@@ -40,15 +40,15 @@ case $ENVIRONMENT in
         RESOURCES="minimal"
         ;;
     *)
-        echo "❌ Unknown environment: $ENVIRONMENT"
+        echo "❌ Unknown environment- $ENVIRONMENT"
         echo "Valid environments: staging, production, development"
         exit 1
         ;;
 esac
 
-echo "🎯 Target URL: $APP_URL"
-echo "🔢 Replicas: $REPLICAS"
-echo "💾 Resources: $RESOURCES"
+echo "🎯 Target URL- $APP_URL"
+echo "🔢 Replicas- $REPLICAS"
+echo "💾 Resources- $RESOURCES"
 
 # Deployment steps
 deploy_step "Preparing deployment artifacts" 3
@@ -79,5 +79,5 @@ deploy_step "Running smoke tests" 3
 deploy_step "Checking monitoring and alerts" 1
 
 echo "🎉 Deployment to $ENVIRONMENT completed successfully!"
-echo "🌐 Application available at: $APP_URL"
+echo "🌐 Application available at- $APP_URL"
 echo "📊 Deployment summary written to deployment.env"

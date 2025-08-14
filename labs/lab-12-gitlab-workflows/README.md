@@ -274,9 +274,9 @@ Add these to your jobs for debugging:
 ```yaml
 script:
   - echo "Debug Info:"
-  - echo "Pipeline ID: $CI_PIPELINE_ID"
-  - echo "Pipeline Source: $CI_PIPELINE_SOURCE"
-  - echo "Branch: $CI_COMMIT_REF_NAME"
+  - echo "Pipeline ID- $CI_PIPELINE_ID"
+  - echo "Pipeline Source- $CI_PIPELINE_SOURCE"
+  - echo "Branch- $CI_COMMIT_REF_NAME"
   - echo "Available variables:"
   - env | grep CI_ | sort
 ```
