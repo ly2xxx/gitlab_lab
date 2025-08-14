@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitLab Workflows Lab - Sample Application</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 GitLab Workflows Lab</h1>
+            <p>Sample Frontend Application</p>
+        </header>
+
+        <main>
+            <section class="status-section">
+                <h2>📊 Pipeline Status</h2>
+                <div id="pipeline-status" class="status-card">
+                    <div class="status-item">
+                        <span class="label">Environment:</span>
+                        <span id="environment" class="value">Development</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Version:</span>
+                        <span id="version" class="value">1.0.0</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Build Status:</span>
+                        <span id="build-status" class="value success">✅ Success</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Last Deployment:</span>
+                        <span id="deployment-time" class="value">Loading...</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="features-section">
+                <h2>🔧 Workflow Features Demonstrated</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>🎯 Basic Triggers</h3>
+                        <ul>
+                            <li>Push triggers</li>
+                            <li>Merge request triggers</li>
+                            <li>Manual triggers</li>
+                            <li>Conditional triggers</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>👨‍👩‍👧‍👦 Parent-Child Pipelines</h3>
+                        <ul>
+                            <li>Static child pipelines</li>
+                            <li>Dynamic child pipelines</li>
+                            <li>Artifact inheritance</li>
+                            <li>Variable passing</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>🔗 Multi-Project</h3>
+                        <ul>
+                            <li>Cross-project triggers</li>
+                            <li>Downstream pipelines</li>
+                            <li>Project dependencies</li>
+                            <li>Notification chains</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>⏰ Scheduled Pipelines</h3>
+                        <ul>
+                            <li>Cron-based scheduling</li>
+                            <li>Maintenance jobs</li>
+                            <li>Nightly builds</li>
+                            <li>Cleanup tasks</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>🚀 Advanced Patterns</h3>
+                        <ul>
+                            <li>Matrix builds</li>
+                            <li>Retry mechanisms</li>
+                            <li>Environment deployments</li>
+                            <li>Security scanning</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section class="test-section">
+                <h2>🧪 Test Workflow Triggers</h2>
+                <div class="test-buttons">
+                    <button onclick="simulateBuild()" class="btn btn-primary">
+                        🔨 Simulate Build
+                    </button>
+                    <button onclick="simulateTest()" class="btn btn-secondary">
+                        🧪 Run Tests
+                    </button>
+                    <button onclick="simulateDeploy()" class="btn btn-success">
+                        🚀 Deploy
+                    </button>
+                    <button onclick="showPipelineInfo()" class="btn btn-info">
+                        📊 Pipeline Info
+                    </button>
+                </div>
+                
+                <div id="test-output" class="test-output">
+                    <p>Click buttons above to simulate workflow actions</p>
+                </div>
+            </section>
+
+            <section class="api-section">
+                <h2>🔌 Backend API Status</h2>
+                <div class="api-status">
+                    <button onclick="checkAPI()" class="btn btn-outline">
+                        🔍 Check API Health
+                    </button>
+                    <div id="api-response" class="api-response">
+                        API status will appear here...
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2024 GitLab Workflows Lab - Learning CI/CD Patterns</p>
+            <p>
+                <a href="https://docs.gitlab.com/ee/ci/" target="_blank">📚 GitLab CI/CD Docs</a> |
+                <a href="#" onclick="showLabInfo()">ℹ️ Lab Info</a>
+            </p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

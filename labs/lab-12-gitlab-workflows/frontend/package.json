@@ -1,0 +1,73 @@
+{
+  "name": "gitlab-workflows-lab-frontend",
+  "version": "1.0.0",
+  "description": "Frontend application demonstrating GitLab CI/CD workflow patterns",
+  "main": "app.js",
+  "scripts": {
+    "start": "python -m http.server 3000",
+    "dev": "python -m http.server 3000",
+    "build": "echo 'Building frontend application...' && mkdir -p dist && cp *.html *.css *.js dist/",
+    "test": "echo 'Running frontend tests...' && npm run lint && npm run test:unit",
+    "test:unit": "echo 'Frontend unit tests passed'",
+    "test:e2e": "echo 'Frontend E2E tests passed'",
+    "lint": "echo 'Linting frontend code...'",
+    "format": "echo 'Formatting frontend code...'",
+    "validate": "echo 'Validating frontend configuration...'",
+    "deploy": "echo 'Deploying frontend application...'",
+    "serve": "python -m http.server 3000"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ly2xxx/gitlab_lab.git"
+  },
+  "keywords": [
+    "gitlab",
+    "ci-cd",
+    "devops",
+    "workflows",
+    "frontend",
+    "lab",
+    "tutorial"
+  ],
+  "author": "GitLab Workflows Lab",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^8.45.0",
+    "prettier": "^3.0.0",
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "axios": "^1.4.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ],
+  "gitlabCI": {
+    "stages": [
+      "validate",
+      "build",
+      "test",
+      "deploy"
+    ],
+    "triggers": {
+      "onPush": true,
+      "onMergeRequest": true,
+      "onSchedule": false
+    },
+    "buildConfig": {
+      "outputDir": "dist",
+      "staticFiles": [
+        "*.html",
+        "*.css", 
+        "*.js",
+        "assets/**/*"
+      ]
+    }
+  }
+}

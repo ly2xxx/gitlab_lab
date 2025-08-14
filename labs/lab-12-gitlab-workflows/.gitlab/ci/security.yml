@@ -1,0 +1,373 @@
+# Security Scanning Pipeline Configuration
+# This pipeline includes various security scanning jobs
+
+stages:
+  - security-static
+  - security-dynamic
+  - security-dependency
+  - security-report
+
+variables:
+  # Security scanning configuration
+  SECURITY_SCANNER_IMAGE: "registry.gitlab.com/security-products/analyzers"
+  SAST_EXCLUDED_ANALYZERS: ""
+  SAST_ANALYZER_IMAGE_TAG: "3"
+  DEPENDENCY_SCANNING_DISABLED: "false"
+  SECRET_DETECTION_DISABLED: "false"
+
+# Static Application Security Testing (SAST)
+sast:
+  stage: security-static
+  image: $SECURITY_SCANNER_IMAGE/sast:$SAST_ANALYZER_IMAGE_TAG
+  script:
+    - echo "🔍 Running Static Application Security Testing (SAST)"
+    - echo "Scanning source code for security vulnerabilities..."
+    - |
+      # Simulate SAST scanning
+      mkdir -p security-reports
+      cat > security-reports/sast-report.json << 'EOF'
+      {
+        "version": "3.0.0",
+        "scan": {
+          "scanner": {
+            "id": "sast-simulator",
+            "name": "SAST Simulator",
+            "version": "1.0.0"
+          },
+          "type": "sast",
+          "start_time": "2024-01-01T00:00:00",
+          "end_time": "2024-01-01T00:05:00",
+          "status": "success"
+        },
+        "vulnerabilities": [
+          {
+            "id": "CVE-2023-12345",
+            "name": "Simulated SQL Injection",
+            "description": "Potential SQL injection vulnerability detected in user input handling",
+            "severity": "Medium",
+            "confidence": "High",
+            "location": {
+              "file": "src/database/query.py",
+              "start_line": 42
+            },
+            "identifiers": [
+              {
+                "type": "cve",
+                "name": "CVE-2023-12345",
+                "value": "CVE-2023-12345"
+              }
+            ]
+          }
+        ]
+      }
+      EOF
+    - echo "📄 SAST scan completed, report generated"
+    - cat security-reports/sast-report.json
+  artifacts:
+    reports:
+      sast: security-reports/sast-report.json
+    paths:
+      - security-reports/
+    expire_in: 1 week
+  rules:
+    - if: '$ENABLE_SECURITY_SCANS == "true"'
+
+# Dependency Scanning
+dependency_scanning:
+  stage: security-dependency
+  image: alpine:latest
+  script:
+    - echo "📦 Running Dependency Scanning"
+    - echo "Scanning dependencies for known vulnerabilities..."
+    - |
+      # Simulate dependency scanning
+      mkdir -p security-reports
+      cat > security-reports/dependency-scanning-report.json << 'EOF'
+      {
+        "version": "3.0.0",
+        "scan": {
+          "scanner": {
+            "id": "dependency-scanner",
+            "name": "Dependency Scanner",
+            "version": "1.0.0"
+          },
+          "type": "dependency_scanning",
+          "start_time": "2024-01-01T00:00:00",
+          "end_time": "2024-01-01T00:03:00",
+          "status": "success"
+        },
+        "dependency_files": [
+          {
+            "path": "package.json",
+            "package_manager": "npm",
+            "dependencies": [
+              {
+                "name": "example-package",
+                "version": "1.2.3"
+              }
+            ]
+          }
+        ],
+        "vulnerabilities": [
+          {
+            "id": "CVE-2023-67890",
+            "name": "Vulnerable Dependency",
+            "description": "Known vulnerability in third-party package",
+            "severity": "High",
+            "location": {
+              "dependency": {
+                "package": {
+                  "name": "example-package"
+                },
+                "version": "1.2.3"
+              }
+            }
+          }
+        ]
+      }
+      EOF
+    - echo "📄 Dependency scan completed, report generated"
+  artifacts:
+    reports:
+      dependency_scanning: security-reports/dependency-scanning-report.json
+    paths:
+      - security-reports/
+    expire_in: 1 week
+  rules:
+    - if: '$ENABLE_SECURITY_SCANS == "true"'
+    - if: '$DEPENDENCY_SCANNING_DISABLED != "true"'
+
+# Secret Detection
+secret_detection:
+  stage: security-static
+  image: alpine:latest
+  script:
+    - echo "🔐 Running Secret Detection"
+    - echo "Scanning for exposed secrets and credentials..."
+    - |
+      # Simulate secret detection
+      mkdir -p security-reports
+      cat > security-reports/secret-detection-report.json << 'EOF'
+      {
+        "version": "3.0.0",
+        "scan": {
+          "scanner": {
+            "id": "secret-detection",
+            "name": "Secret Detection Scanner",
+            "version": "1.0.0"
+          },
+          "type": "secret_detection",
+          "start_time": "2024-01-01T00:00:00",
+          "end_time": "2024-01-01T00:02:00",
+          "status": "success"
+        },
+        "vulnerabilities": [
+          {
+            "id": "SECRET-001",
+            "name": "Hardcoded API Key",
+            "description": "Potential API key found in source code",
+            "severity": "Critical",
+            "confidence": "High",
+            "location": {
+              "file": "config/settings.py",
+              "start_line": 15,
+              "end_line": 15
+            },
+            "raw_source_code_extract": "API_KEY = 'sk-1234567890abcdef'"
+          }
+        ]
+      }
+      EOF
+    - echo "📄 Secret detection completed, report generated"
+    - echo "⚠️ Found potential secrets in code - review required"
+  artifacts:
+    reports:
+      secret_detection: security-reports/secret-detection-report.json
+    paths:
+      - security-reports/
+    expire_in: 1 week
+  rules:
+    - if: '$ENABLE_SECURITY_SCANS == "true"'
+    - if: '$SECRET_DETECTION_DISABLED != "true"'
+
+# Container Scanning (for Docker images)
+container_scanning:
+  stage: security-static
+  image: alpine:latest
+  script:
+    - echo "🐳 Running Container Security Scanning"
+    - echo "Scanning Docker images for vulnerabilities..."
+    - |
+      # Simulate container scanning
+      mkdir -p security-reports
+      cat > security-reports/container-scanning-report.json << 'EOF'
+      {
+        "version": "3.0.0",
+        "scan": {
+          "scanner": {
+            "id": "container-scanner",
+            "name": "Container Scanner",
+            "version": "1.0.0"
+          },
+          "type": "container_scanning",
+          "start_time": "2024-01-01T00:00:00",
+          "end_time": "2024-01-01T00:04:00",
+          "status": "success"
+        },
+        "vulnerabilities": [
+          {
+            "id": "CVE-2023-11111",
+            "name": "Base Image Vulnerability",
+            "description": "Vulnerability found in base operating system package",
+            "severity": "Medium",
+            "location": {
+              "operating_system": "alpine:latest",
+              "package": "openssl"
+            }
+          }
+        ]
+      }
+      EOF
+    - echo "📄 Container scan completed, report generated"
+  artifacts:
+    reports:
+      container_scanning: security-reports/container-scanning-report.json
+    paths:
+      - security-reports/
+    expire_in: 1 week
+  rules:
+    - if: '$ENABLE_SECURITY_SCANS == "true"'
+    - exists:
+        - Dockerfile
+
+# License Scanning
+license_scanning:
+  stage: security-dependency
+  image: alpine:latest
+  script:
+    - echo "📜 Running License Scanning"
+    - echo "Scanning dependencies for license compliance..."
+    - |
+      # Simulate license scanning
+      mkdir -p security-reports
+      cat > security-reports/license-scanning-report.json << 'EOF'
+      {
+        "version": "2.0",
+        "licenses": [
+          {
+            "id": "MIT",
+            "name": "MIT License",
+            "url": "https://opensource.org/licenses/MIT"
+          },
+          {
+            "id": "Apache-2.0",
+            "name": "Apache License 2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          },
+          {
+            "id": "GPL-3.0",
+            "name": "GNU General Public License v3.0",
+            "url": "https://opensource.org/licenses/GPL-3.0"
+          }
+        ],
+        "dependencies": [
+          {
+            "name": "example-package",
+            "version": "1.2.3",
+            "licenses": ["MIT"]
+          },
+          {
+            "name": "another-package",
+            "version": "2.1.0",
+            "licenses": ["Apache-2.0"]
+          },
+          {
+            "name": "gpl-package",
+            "version": "1.0.0",
+            "licenses": ["GPL-3.0"]
+          }
+        ]
+      }
+      EOF
+    - echo "📄 License scan completed, report generated"
+    - echo "⚠️ GPL-3.0 license detected - review for compliance"
+  artifacts:
+    reports:
+      license_scanning: security-reports/license-scanning-report.json
+    paths:
+      - security-reports/
+    expire_in: 1 week
+  rules:
+    - if: '$ENABLE_SECURITY_SCANS == "true"'
+
+# Security Report Consolidation
+security_report_summary:
+  stage: security-report
+  image: alpine:latest
+  script:
+    - echo "📊 Generating Security Report Summary"
+    - echo "Consolidating all security scan results..."
+    - |
+      mkdir -p final-reports
+      
+      # Count vulnerabilities by severity
+      HIGH_VULNS=2
+      MEDIUM_VULNS=3
+      LOW_VULNS=1
+      CRITICAL_VULNS=1
+      
+      cat > final-reports/security-summary.md << EOF
+      # Security Scan Summary Report
+      
+      ## Overview
+      - **Scan Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+      - **Pipeline ID**: $CI_PIPELINE_ID
+      - **Branch**: $CI_COMMIT_REF_NAME
+      - **Commit**: $CI_COMMIT_SHA
+      
+      ## Vulnerability Summary
+      | Severity | Count |
+      |----------|-------|
+      | Critical | $CRITICAL_VULNS |
+      | High     | $HIGH_VULNS |
+      | Medium   | $MEDIUM_VULNS |
+      | Low      | $LOW_VULNS |
+      
+      ## Scan Results
+      - ✅ SAST: Completed
+      - ✅ Dependency Scanning: Completed  
+      - ✅ Secret Detection: Completed
+      - ✅ Container Scanning: Completed
+      - ✅ License Scanning: Completed
+      
+      ## Recommendations
+      1. Review and fix critical and high severity vulnerabilities
+      2. Update dependencies with known vulnerabilities
+      3. Remove hardcoded secrets from source code
+      4. Review GPL-licensed dependencies for compliance
+      
+      ## Next Steps
+      - Security team review required for production deployment
+      - Create tickets for vulnerability remediation
+      - Update security policies as needed
+      EOF
+    - echo "📄 Security summary report generated"
+    - cat final-reports/security-summary.md
+  artifacts:
+    paths:
+      - final-reports/
+    expire_in: 30 days
+  needs:
+    - job: sast
+      optional: true
+    - job: dependency_scanning
+      optional: true
+    - job: secret_detection
+      optional: true
+    - job: container_scanning
+      optional: true
+    - job: license_scanning
+      optional: true
+  rules:
+    - if: '$ENABLE_SECURITY_SCANS == "true"'
+      when: always
