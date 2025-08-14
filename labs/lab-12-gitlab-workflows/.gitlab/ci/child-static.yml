@@ -1,0 +1,99 @@
+# Static Child Pipeline Configuration
+# This pipeline is triggered from the parent pipeline with predefined jobs
+
+stages:
+  - child-validate
+  - child-build
+  - child-test
+  - child-report
+
+variables:
+  CHILD_PIPELINE_TYPE: "static"
+
+# Inherit variables from parent
+before_script:
+  - echo "🔗 Child Pipeline (Static) - ID: $CI_PIPELINE_ID"
+  - echo "📋 Parent Pipeline ID: $PARENT_PIPELINE_ID"
+  - echo "🎯 Child Type: $CHILD_TYPE"
+
+# Child pipeline validation
+child-validate-config:
+  stage: child-validate
+  script:
+    - echo "✅ Validating child pipeline configuration"
+    - echo "Checking inherited variables..."
+    - echo "Parent Pipeline: $PARENT_PIPELINE_ID"
+    - echo "Child Type: $CHILD_TYPE"
+
+# Build tasks specific to this child pipeline
+child-build-component-a:
+  stage: child-build
+  script:
+    - echo "🔨 Building Component A in child pipeline"
+    - mkdir -p child-artifacts/component-a
+    - echo "Component A built at $(date)" > child-artifacts/component-a/build.log
+  artifacts:
+    paths:
+      - child-artifacts/component-a/
+    expire_in: 30 minutes
+
+child-build-component-b:
+  stage: child-build
+  script:
+    - echo "🔨 Building Component B in child pipeline"
+    - mkdir -p child-artifacts/component-b
+    - echo "Component B built at $(date)" > child-artifacts/component-b/build.log
+  artifacts:
+    paths:
+      - child-artifacts/component-b/
+    expire_in: 30 minutes
+
+# Parallel testing in child pipeline
+child-test-unit:
+  stage: child-test
+  script:
+    - echo "🧪 Running unit tests in child pipeline"
+    - echo "Testing Component A..."
+    - echo "Testing Component B..."
+    - echo "✅ Unit tests passed"
+  needs:
+    - child-build-component-a
+    - child-build-component-b
+
+child-test-integration:
+  stage: child-test
+  script:
+    - echo "🔗 Running integration tests in child pipeline"
+    - echo "Testing component interactions..."
+    - echo "✅ Integration tests passed"
+  needs:
+    - child-build-component-a
+    - child-build-component-b
+
+# Generate report from child pipeline
+child-generate-report:
+  stage: child-report
+  script:
+    - echo "📊 Generating child pipeline report"
+    - mkdir -p reports
+    - |
+      cat > reports/child-static-report.json << EOF
+      {
+        "pipeline_type": "static-child",
+        "parent_pipeline_id": "$PARENT_PIPELINE_ID",
+        "child_pipeline_id": "$CI_PIPELINE_ID",
+        "components_built": ["component-a", "component-b"],
+        "tests_run": ["unit", "integration"],
+        "status": "success",
+        "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      }
+      EOF
+    - echo "📄 Report generated: reports/child-static-report.json"
+    - cat reports/child-static-report.json
+  artifacts:
+    paths:
+      - reports/
+    expire_in: 1 day
+  needs:
+    - child-test-unit
+    - child-test-integration

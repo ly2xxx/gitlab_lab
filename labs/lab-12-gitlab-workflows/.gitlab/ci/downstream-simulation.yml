@@ -1,0 +1,155 @@
+# Downstream Project Simulation Pipeline
+# This simulates a separate project that would be triggered by the main pipeline
+
+stages:
+  - downstream-validate
+  - downstream-build
+  - downstream-deploy
+  - downstream-notify
+
+variables:
+  DOWNSTREAM_PROJECT_NAME: "example-downstream"
+  NOTIFICATION_WEBHOOK: "https://hooks.slack.com/example"
+
+before_script:
+  - echo "🔗 Downstream Pipeline Triggered"
+  - echo "📋 Upstream Project: $UPSTREAM_PROJECT"
+  - echo "🆔 Upstream Commit: $UPSTREAM_COMMIT"
+  - echo "🌍 Target Environment: $DEPLOYMENT_ENVIRONMENT"
+
+# Validate upstream information
+downstream-validate-trigger:
+  stage: downstream-validate
+  script:
+    - echo "🔍 Validating upstream trigger information"
+    - echo "Checking if upstream project is authorized..."
+    - echo "Validating commit SHA format..."
+    - echo "Verifying deployment environment..."
+    - |
+      if [ -z "$UPSTREAM_PROJECT" ] || [ -z "$UPSTREAM_COMMIT" ]; then
+        echo "❌ Missing required upstream information"
+        exit 1
+      fi
+    - echo "✅ Upstream trigger validation passed"
+
+# Build downstream components
+downstream-build-api:
+  stage: downstream-build
+  script:
+    - echo "🔨 Building downstream API service"
+    - echo "Fetching dependencies from upstream project..."
+    - echo "Compiling downstream-specific components..."
+    - mkdir -p downstream-artifacts/api
+    - echo "Downstream API built from upstream $UPSTREAM_COMMIT" > downstream-artifacts/api/build.log
+    - echo "✅ Downstream API build completed"
+  artifacts:
+    paths:
+      - downstream-artifacts/api/
+    expire_in: 1 hour
+  needs:
+    - downstream-validate-trigger
+
+downstream-build-worker:
+  stage: downstream-build
+  script:
+    - echo "🔨 Building downstream worker service"
+    - echo "Configuring worker based on upstream changes..."
+    - echo "Setting up message processing..."
+    - mkdir -p downstream-artifacts/worker
+    - echo "Downstream worker built from upstream $UPSTREAM_COMMIT" > downstream-artifacts/worker/build.log
+    - echo "✅ Downstream worker build completed"
+  artifacts:
+    paths:
+      - downstream-artifacts/worker/
+    expire_in: 1 hour
+  needs:
+    - downstream-validate-trigger
+
+# Deploy downstream services
+downstream-deploy-staging:
+  stage: downstream-deploy
+  script:
+    - echo "🚀 Deploying downstream services to staging"
+    - echo "Deploying API service..."
+    - echo "Deploying worker service..."
+    - echo "Configuring service mesh..."
+    - echo "Running post-deployment checks..."
+    - echo "✅ Downstream staging deployment completed"
+  environment:
+    name: downstream-staging
+    url: https://downstream-staging.example.com
+  needs:
+    - downstream-build-api
+    - downstream-build-worker
+  rules:
+    - if: '$DEPLOYMENT_ENVIRONMENT == "staging"'
+    - if: '$DEPLOYMENT_ENVIRONMENT == "production"'
+
+downstream-deploy-production:
+  stage: downstream-deploy
+  script:
+    - echo "🚀 Deploying downstream services to production"
+    - echo "Performing production pre-checks..."
+    - echo "Deploying with blue-green strategy..."
+    - echo "Switching traffic to new version..."
+    - echo "Monitoring deployment metrics..."
+    - echo "✅ Downstream production deployment completed"
+  environment:
+    name: downstream-production
+    url: https://downstream-production.example.com
+  needs:
+    - downstream-build-api
+    - downstream-build-worker
+  rules:
+    - if: '$DEPLOYMENT_ENVIRONMENT == "production"'
+      when: manual
+
+# Notification and reporting
+downstream-notify-completion:
+  stage: downstream-notify
+  script:
+    - echo "📢 Sending completion notification"
+    - echo "Preparing notification payload..."
+    - |
+      cat > notification.json << EOF
+      {
+        "text": "Downstream deployment completed",
+        "attachments": [
+          {
+            "color": "good",
+            "fields": [
+              {
+                "title": "Upstream Project",
+                "value": "$UPSTREAM_PROJECT",
+                "short": true
+              },
+              {
+                "title": "Upstream Commit",
+                "value": "$UPSTREAM_COMMIT",
+                "short": true
+              },
+              {
+                "title": "Environment",
+                "value": "$DEPLOYMENT_ENVIRONMENT",
+                "short": true
+              },
+              {
+                "title": "Status",
+                "value": "✅ Success",
+                "short": true
+              }
+            ]
+          }
+        ]
+      }
+      EOF
+    - echo "📄 Notification payload:"
+    - cat notification.json
+    - echo "📤 Notification sent (simulated)"
+    - echo "✅ Downstream pipeline notification completed"
+  artifacts:
+    paths:
+      - notification.json
+    expire_in: 1 day
+  rules:
+    - when: always
