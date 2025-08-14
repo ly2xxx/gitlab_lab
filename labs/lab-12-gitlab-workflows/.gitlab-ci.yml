@@ -233,7 +233,7 @@ flaky-integration-test:
   stage: deploy
   script:
     - echo "🚀 Deploying to $DEPLOY_ENVIRONMENT"
-    - echo "Target URL: https://$DEPLOY_ENVIRONMENT.example.com"
+    # - echo "Target URL: https://$DEPLOY_ENVIRONMENT.example.com"
     - ./scripts/deploy.sh $DEPLOY_ENVIRONMENT
   artifacts:
     reports:
