@@ -1,0 +1,119 @@
+# Child Pipeline Inheritance Lab - Main Pipeline Configuration
+# This lab demonstrates child pipeline inheritance and dynamic pipeline generation
+
+# Global variables and configuration
+variables:
+  # Application variables
+  WEB_APP_VERSION: "1.0.0"
+  API_VERSION: "2.0.0"
+  DOCKER_REGISTRY: "$CI_REGISTRY"
+  
+  # Pipeline control variables
+  ENABLE_MATRIX_BUILDS: "false"
+  ENABLE_SECURITY_SCANS: "false"
+  SKIP_DEPLOY: "false"
+
+# Define stages for the pipeline
+stages:
+  - validate
+  - build
+  - child-pipelines
+
+# Global defaults
+default:
+  image: alpine:latest
+  before_script:
+    - echo "Pipeline ID- $CI_PIPELINE_ID"
+    - echo "Branch- $CI_COMMIT_REF_NAME"
+    - echo "Pipeline Source- $CI_PIPELINE_SOURCE"
+
+# Include templates for reusable configurations
+include:
+  # Local includes for modular configuration
+  - local: '.gitlab/ci/rules.yml'
+  - local: '.gitlab/ci/variables.yml'
+
+# ============================================================================
+# BASIC PIPELINE TRIGGERS SECTION
+# ============================================================================
+
+# 1. Basic Push Trigger - runs on every push
+validate-syntax:
+  stage: validate
+  script:
+    - echo "Validating YAML syntax and basic checks"
+    - echo "Checking for required files..."
+    - ls -la
+    - echo "✅ Validation complete"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+backend-build:
+  stage: build
+  script:
+    - echo "⚙️ Building backend API"
+    - mkdir -p dist/backend
+    - echo "Backend API ready" > dist/backend/app.jar
+  artifacts:
+    paths:
+      - dist/backend/
+    expire_in: 1 hour
+  rules:
+    - changes:
+        - "backend/**/*"
+        - "requirements.txt"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ============================================================================
+# PARENT-CHILD PIPELINES SECTION
+# ============================================================================
+
+# Generate dynamic child pipeline configuration
+generate-child-pipeline:
+  stage: build
+  image: ubuntu:latest
+  script:
+    - echo "📋 Generating dynamic child pipeline configuration"
+    - echo "Working directory- $(pwd)"
+    - echo "Project directory- $CI_PROJECT_DIR"
+    - ls -la $CI_PROJECT_DIR/
+    - cd $CI_PROJECT_DIR/scripts
+    - echo "Generating child pipeline configuration..."
+    - ls -lta ./
+    - apt-get update && apt-get install -y dos2unix
+    - dos2unix $CI_PROJECT_DIR/scripts/generate-child-pipeline.sh
+    - chmod +x $CI_PROJECT_DIR/scripts/generate-child-pipeline.sh
+    - echo "After dos2unix and chmod..."
+    - ls -lta ./
+    - $CI_PROJECT_DIR/scripts/generate-child-pipeline.sh
+    - echo "Checking generated artifact..."
+    - ls -la $CI_PROJECT_DIR/generated-child-pipeline.yml
+    - echo "Artifact content preview:"
+    - head -20 $CI_PROJECT_DIR/generated-child-pipeline.yml
+  artifacts:
+    paths:
+      - generated-child-pipeline.yml
+    expire_in: 1 hour
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Dynamic Child Pipeline - Generated configuration
+trigger-dynamic-child:
+  stage: child-pipelines
+  trigger:
+    include:
+      - artifact: generated-child-pipeline.yml
+        job: generate-child-pipeline
+    strategy: depend
+  variables:
+    PARENT_PIPELINE_ID: $CI_PIPELINE_ID
+    CHILD_TYPE: "dynamic"
+  needs:
+    - job: generate-child-pipeline
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

@@ -1,0 +1,166 @@
+# GitLab CI Variables Configuration
+# This file contains reusable variable definitions and templates
+
+# Global variable templates
+.variables:base:
+  variables:
+    # Application metadata
+    APP_NAME: "gitlab-workflows-lab"
+    APP_VERSION: "1.0.0"
+    BUILD_TIMESTAMP: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    
+    # Docker configuration
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_BUILDKIT: "1"
+    
+    # Deployment configuration
+    DEPLOYMENT_TIMEOUT: "600"
+    HEALTH_CHECK_TIMEOUT: "120"
+    ROLLBACK_ENABLED: "true"
+
+.variables:development:
+  variables:
+    ENVIRONMENT: "development"
+    LOG_LEVEL: "debug"
+    REPLICAS: "1"
+    RESOURCE_LIMIT_CPU: "500m"
+    RESOURCE_LIMIT_MEMORY: "512Mi"
+    DATABASE_POOL_SIZE: "5"
+
+.variables:staging:
+  variables:
+    ENVIRONMENT: "staging"
+    LOG_LEVEL: "info"
+    REPLICAS: "2"
+    RESOURCE_LIMIT_CPU: "1000m"
+    RESOURCE_LIMIT_MEMORY: "1Gi"
+    DATABASE_POOL_SIZE: "10"
+
+.variables:production:
+  variables:
+    ENVIRONMENT: "production"
+    LOG_LEVEL: "warn"
+    REPLICAS: "5"
+    RESOURCE_LIMIT_CPU: "2000m"
+    RESOURCE_LIMIT_MEMORY: "2Gi"
+    DATABASE_POOL_SIZE: "20"
+
+# Feature flag variables
+.variables:feature-flags:
+  variables:
+    # Pipeline features
+    ENABLE_MATRIX_BUILDS: "false"
+    ENABLE_SECURITY_SCANS: "false"
+    ENABLE_PERFORMANCE_TESTS: "false"
+    ENABLE_E2E_TESTS: "false"
+    
+    # Deployment features
+    ENABLE_CANARY_DEPLOYMENT: "false"
+    ENABLE_BLUE_GREEN_DEPLOYMENT: "false"
+    ENABLE_ROLLBACK_ON_FAILURE: "true"
+    
+    # Notification features
+    ENABLE_SLACK_NOTIFICATIONS: "false"
+    ENABLE_EMAIL_NOTIFICATIONS: "false"
+    ENABLE_WEBHOOK_NOTIFICATIONS: "false"
+
+# Security-related variables
+.variables:security:
+  variables:
+    # Scanning configuration
+    SECURITY_SCAN_TIMEOUT: "300"
+    SAST_EXCLUDED_PATHS: "tests/,docs/"
+    DEPENDENCY_SCAN_ENABLED: "true"
+    SECRET_DETECTION_ENABLED: "true"
+    
+    # Security thresholds
+    SECURITY_SEVERITY_THRESHOLD: "medium"
+    VULNERABILITY_ALLOWLIST: ""
+    SECURITY_REPORT_FORMAT: "json"
+
+# Test configuration variables
+.variables:testing:
+  variables:
+    # Test execution
+    TEST_TIMEOUT: "300"
+    TEST_PARALLEL_WORKERS: "4"
+    TEST_RETRY_COUNT: "3"
+    
+    # Coverage settings
+    CODE_COVERAGE_THRESHOLD: "80"
+    COVERAGE_REPORT_FORMAT: "cobertura"
+    
+    # Test data
+    TEST_DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
+    TEST_REDIS_URL: "redis://localhost:6379/0"
+
+# Monitoring and observability variables
+.variables:monitoring:
+  variables:
+    # Metrics and logging
+    PROMETHEUS_ENABLED: "true"
+    GRAFANA_DASHBOARD_ENABLED: "true"
+    LOG_AGGREGATION_ENABLED: "true"
+    
+    # Alerting
+    ALERT_MANAGER_ENABLED: "true"
+    ALERT_WEBHOOK_URL: ""
+    ALERT_SEVERITY_LEVELS: "critical,warning,info"
+    
+    # Health checks
+    HEALTH_CHECK_ENDPOINT: "/health"
+    READINESS_CHECK_ENDPOINT: "/ready"
+    LIVENESS_CHECK_ENDPOINT: "/alive"
+
+# Performance testing variables
+.variables:performance:
+  variables:
+    # Load testing
+    LOAD_TEST_DURATION: "300s"
+    LOAD_TEST_USERS: "100"
+    LOAD_TEST_RAMP_UP: "60s"
+    
+    # Performance thresholds
+    RESPONSE_TIME_THRESHOLD: "500ms"
+    ERROR_RATE_THRESHOLD: "1%"
+    THROUGHPUT_THRESHOLD: "1000rps"
+
+# External service configuration
+.variables:external-services:
+  variables:
+    # Database
+    DATABASE_HOST: "localhost"
+    DATABASE_PORT: "5432"
+    DATABASE_NAME: "app_db"
+    
+    # Cache
+    REDIS_HOST: "localhost"
+    REDIS_PORT: "6379"
+    
+    # Message queue
+    RABBITMQ_HOST: "localhost"
+    RABBITMQ_PORT: "5672"
+    
+    # External APIs
+    EXTERNAL_API_TIMEOUT: "30s"
+    EXTERNAL_API_RETRY_COUNT: "3"
+
+# Build tool versions
+.variables:tools:
+  variables:
+    # Language versions
+    NODE_VERSION: "18.17.0"
+    PYTHON_VERSION: "3.11.4"
+    JAVA_VERSION: "17.0.7"
+    GO_VERSION: "1.20.6"
+    
+    # Build tools
+    MAVEN_VERSION: "3.9.3"
+    GRADLE_VERSION: "8.2.1"
+    NPM_VERSION: "9.6.7"
+    
+    # Container tools
+    DOCKER_VERSION: "24.0.5"
+    KUBECTL_VERSION: "1.27.4"
+    HELM_VERSION: "3.12.2"

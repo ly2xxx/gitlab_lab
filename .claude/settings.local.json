@@ -22,8 +22,10 @@
       "Bash(grep:*)",
       "Bash(sed:*)",
       "Bash(dos2unix:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(cp:*)"
     ],
-    "deny": []
+    "deny": [],
+    "defaultMode": "acceptEdits"
   }
 }
