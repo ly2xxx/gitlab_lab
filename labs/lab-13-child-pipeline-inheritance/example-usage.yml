@@ -1,0 +1,75 @@
+# Example: How to use the Child Pipeline Inheritance Component in another project
+# Save this as .gitlab-ci.yml in your project
+
+# Include the child pipeline inheritance component
+include:
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/child-pipeline-inheritance@main
+    inputs:
+      stage: "maintenance"
+      enable_backend_build: "true"  
+      enable_validation: "true"
+      docker_image: "ubuntu:22.04"
+      component_stages: "validate,build,test,maintenance"
+
+# Define your project stages (must include the stages used by the component)
+stages:
+  - validate      # Used by component-validate-syntax
+  - build         # Used by component-backend-build  
+  - test          # Your custom stages
+  - maintenance   # Used by component-generate-child-pipeline and component-trigger-dynamic-child
+
+# Your project-specific variables
+variables:
+  PROJECT_NAME: "my-awesome-project"
+  BUILD_VERSION: "1.0.0"
+
+# Your custom jobs (will work alongside component jobs)
+custom-tests:
+  stage: test
+  script:
+    # Use the component's standardized logging
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "Running custom project tests"
+    - log_debug "Project: $PROJECT_NAME"
+    - log_debug "Version: $BUILD_VERSION"
+    
+    # Your test logic here
+    - echo "Running unit tests..."
+    - echo "Running integration tests..."
+    
+    - log_info "✅ Custom tests completed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+deploy-staging:
+  stage: test  
+  script:
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "🚀 Deploying to staging environment"
+    - log_debug "Deployment target: staging.example.com"
+    
+    # Your deployment logic
+    - echo "Deploying application..."
+    - sleep 2
+    
+    - log_info "✅ Staging deployment completed"
+  environment:
+    name: staging
+    url: https://staging.example.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+
+# The component will automatically add these jobs to your pipeline:
+# 1. component-validate-syntax (stage: validate)
+# 2. component-backend-build (stage: build) - if backend changes detected
+# 3. component-generate-child-pipeline (stage: maintenance)  
+# 4. component-trigger-dynamic-child (stage: maintenance)
+
+# The generated child pipeline will include dynamic jobs based on your project structure:
+# - dynamic-build-frontend (if frontend/ or *.js files detected)
+# - dynamic-build-backend (if backend/ or *.py files detected)  
+# - dynamic-build-infrastructure (if Dockerfile or kubernetes/ detected)
+# - dynamic-deploy-production (if main branch, manual trigger)

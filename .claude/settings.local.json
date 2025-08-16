@@ -29,7 +29,10 @@
       "Bash(log_debug \"Test debug message\")",
       "Bash(log_info \"✅ GitLab CI style logging working!\")",
       "Bash(log_warn \"⚠️ Warning message\")",
-      "Bash(log_debug \"🔍 Debug information\")"
+      "Bash(log_debug \"🔍 Debug information\")",
+      "Bash(log_info \"✅ Component logging functions work correctly\")",
+      "Bash(log_debug \"Testing embedded script functionality\")",
+      "Bash(log_warn \"Component is ready for deployment\")"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
