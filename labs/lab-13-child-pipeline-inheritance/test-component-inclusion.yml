@@ -1,0 +1,42 @@
+# Test: Component inclusion from another project
+# This simulates how a dependent project would include the component
+
+include:
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/child-pipeline-inheritance@main
+    inputs:
+      stage: "maintenance"
+      enable_backend_build: "true"
+      enable_validation: "true"
+      docker_image: "ubuntu:22.04"
+      component_stages: "validate,build,test,maintenance"
+
+# Define stages that include component stages
+stages:
+  - validate      # Used by component-validate-syntax
+  - build         # Used by component-backend-build  
+  - test          # Custom project stages
+  - maintenance   # Used by component-generate-child-pipeline and component-trigger-dynamic-child
+
+# Project variables
+variables:
+  PROJECT_NAME: "test-project"
+  BUILD_VERSION: "1.0.0"
+
+# Custom project job that uses component logging
+custom-tests:
+  stage: test
+  script:
+    # Use the component's standardized logging
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "Running custom project tests"
+    - log_debug "Project: $PROJECT_NAME"
+    - log_debug "Version: $BUILD_VERSION"
+    
+    # Test logic
+    - echo "Running unit tests..."
+    - echo "Running integration tests..."
+    
+    - log_info "✅ Custom tests completed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
