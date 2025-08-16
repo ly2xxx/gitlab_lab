@@ -169,13 +169,6 @@ dynamic-pipeline-summary:
   stage: dynamic-deploy
   script:
     - echo "📊 Dynamic Pipeline Summary"
-    - echo "=============================="
-    - echo "Pipeline Type: Dynamic Child"
-    - echo "Generated at- $GENERATION_TIME"
-    - echo "Parent Pipeline- $PARENT_PIPELINE_ID"
-    - echo "Child Pipeline- $CI_PIPELINE_ID"
-    - echo "Changes analyzed and processed dynamically"
-    - echo "✅ Dynamic pipeline completed successfully"
   rules:
     - when: always
 EOF
