@@ -3,20 +3,19 @@
 
 # Include the child pipeline inheritance component
 include:
-  - component: $CI_SERVER_FQDN/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/child-pipeline-inheritance@main
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_NAMESPACE/lab-13-child-pipeline-inheritance/child-pipeline-inheritance@main
     inputs:
-      stage: "maintenance"
-      enable_backend_build: "true"  
-      enable_validation: "true"
-      docker_image: "ubuntu:22.04"
-      component_stages: "validate,build,test,maintenance"
+      stage: "maintenance"           # Stage where component jobs will run
+      enable_backend_build: "true"   # Enable backend build job
+      enable_validation: "true"      # Enable validation job
+      docker_image: "ubuntu:22.04"   # Container image for pipeline generation
 
-# Define your project stages (must include the stages used by the component)
+# Define your project stages (must include the stage specified in component inputs)
 stages:
-  - validate      # Used by component-validate-syntax
-  - build         # Used by component-backend-build  
+  - validate      # Your custom stages
+  - build         # Your custom stages  
   - test          # Your custom stages
-  - maintenance   # Used by component-generate-child-pipeline and component-trigger-dynamic-child
+  - maintenance   # Stage where component jobs will run (matches inputs.stage)
 
 # Your project-specific variables
 variables:

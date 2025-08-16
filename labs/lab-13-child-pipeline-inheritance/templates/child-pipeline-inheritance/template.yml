@@ -15,9 +15,6 @@ spec:
     docker_image:
       description: "Docker image for pipeline generation"
       default: "ubuntu:latest"
-    component_stages:
-      description: "Stages to add to the pipeline"
-      default: "validate,build,maintenance"
 
 # Component variables including echo functions
 variables:
@@ -30,7 +27,7 @@ variables:
 
 # Component jobs
 component-validate-syntax:
-  stage: validate
+  stage: $[[ inputs.stage ]]
   script:
     - eval "$ECHO_FUNCTIONS"
     - log_info "🚀 Pipeline started - ID- $CI_PIPELINE_ID"
@@ -39,11 +36,12 @@ component-validate-syntax:
     - ls -la
     - log_info "✅ Validation complete"
   rules:
+    - if: $[[ inputs.enable_validation ]] == "true"
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 component-backend-build:
-  stage: build
+  stage: $[[ inputs.stage ]]
   script:
     - eval "$ECHO_FUNCTIONS"
     - log_info "🔨 Building backend API"
@@ -55,15 +53,16 @@ component-backend-build:
       - dist/backend/
     expire_in: 1 hour
   rules:
-    - changes:
+    - if: $[[ inputs.enable_backend_build ]] == "true"
+      changes:
         - "backend/**/*"
         - "requirements.txt"
       when: on_success
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 component-generate-child-pipeline:
-  stage: maintenance
-  image: ubuntu:latest
+  stage: $[[ inputs.stage ]]
+  image: $[[ inputs.docker_image ]]
   script:
     - eval "$ECHO_FUNCTIONS"
     - log_info "📋 Generating dynamic child pipeline configuration"
@@ -268,7 +267,7 @@ component-generate-child-pipeline:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 component-trigger-dynamic-child:
-  stage: maintenance
+  stage: $[[ inputs.stage ]]
   trigger:
     include:
       - artifact: generated-child-pipeline.yml

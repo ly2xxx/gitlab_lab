@@ -1,0 +1,31 @@
+# Simple GitLab Component for Testing
+spec:
+  inputs:
+    stage:
+      description: "Pipeline stage for child pipeline jobs"
+      default: "maintenance"
+    enable_backend_build:
+      description: "Enable backend build job"
+      default: "true"
+    enable_validation:
+      description: "Enable syntax validation job"  
+      default: "true"
+    docker_image:
+      description: "Docker image for pipeline generation"
+      default: "ubuntu:latest"
+
+variables:
+  ECHO_FUNCTIONS: |
+    log_info() { echo -e "\033[32m[INFO] ℹ️ $1\033[0m"; }
+
+test-component-job:
+  stage: $[[ inputs.stage ]]
+  image: $[[ inputs.docker_image ]]
+  script:
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "Component test job running"
+    - echo "Stage: $[[ inputs.stage ]]"
+    - echo "Validation enabled: $[[ inputs.enable_validation ]]"
+    - echo "Backend build enabled: $[[ inputs.enable_backend_build ]]"
+  rules:
+    - if: $[[ inputs.enable_validation ]] == "true"

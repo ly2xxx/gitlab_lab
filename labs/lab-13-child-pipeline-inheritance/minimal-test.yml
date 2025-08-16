@@ -1,0 +1,14 @@
+# Minimal test for component usage - Test exactly what user is trying
+include:
+  - component: host.docker.internal/root/gitlab-lab-11-git-ops/child-pipeline-inheritance@main
+    inputs:
+      stage: "maintenance"
+      enable_backend_build: "true"
+      enable_validation: "true"
+      docker_image: "ubuntu:22.04"
+
+stages:
+  - maintenance
+
+variables:
+  TEST_VAR: "test"
