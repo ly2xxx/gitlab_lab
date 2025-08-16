@@ -17,7 +17,7 @@ variables:
 stages:
   - validate
   - build
-  - child-pipelines
+  - maintenance
 
 # Global defaults
 default:
@@ -102,7 +102,7 @@ generate-child-pipeline:
 
 # Dynamic Child Pipeline - Generated configuration
 trigger-dynamic-child:
-  stage: child-pipelines
+  stage: maintenance
   trigger:
     include:
       - artifact: generated-child-pipeline.yml
