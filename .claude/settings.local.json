@@ -23,7 +23,13 @@
       "Bash(sed:*)",
       "Bash(dos2unix:*)",
       "Bash(python3:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(log_info \"Test from GitLab CI variable\")",
+      "Bash(log_error:*)",
+      "Bash(log_debug \"Test debug message\")",
+      "Bash(log_info \"✅ GitLab CI style logging working!\")",
+      "Bash(log_warn \"⚠️ Warning message\")",
+      "Bash(log_debug \"🔍 Debug information\")"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

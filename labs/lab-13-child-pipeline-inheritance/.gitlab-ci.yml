@@ -32,6 +32,7 @@ include:
   # Local includes for modular configuration
   - local: '.gitlab/ci/rules.yml'
   - local: '.gitlab/ci/variables.yml'
+  - local: '.gitlab/ci/echo.yml'
 
 # ============================================================================
 # BASIC PIPELINE TRIGGERS SECTION
@@ -41,10 +42,12 @@ include:
 validate-syntax:
   stage: validate
   script:
-    - echo "Validating YAML syntax and basic checks"
-    - echo "Checking for required files..."
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "🚀 Pipeline started - ID- $CI_PIPELINE_ID"
+    - log_info "Validating YAML syntax and basic checks"
+    - log_debug "Checking for required files..."
     - ls -la
-    - echo "✅ Validation complete"
+    - log_info "✅ Validation complete"
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -52,9 +55,11 @@ validate-syntax:
 backend-build:
   stage: build
   script:
-    - echo "⚙️ Building backend API"
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "🔨 Building backend API"
     - mkdir -p dist/backend
     - echo "Backend API ready" > dist/backend/app.jar
+    - log_info "✅ Backend API build completed"
   artifacts:
     paths:
       - dist/backend/
@@ -75,22 +80,23 @@ generate-child-pipeline:
   stage: build
   image: ubuntu:latest
   script:
-    - echo "📋 Generating dynamic child pipeline configuration"
-    - echo "Working directory- $(pwd)"
-    - echo "Project directory- $CI_PROJECT_DIR"
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "📋 Generating dynamic child pipeline configuration"
+    - log_debug "Working directory- $(pwd)"
+    - log_debug "Project directory- $CI_PROJECT_DIR"
     - ls -la $CI_PROJECT_DIR/
     - cd $CI_PROJECT_DIR/scripts
-    - echo "Generating child pipeline configuration..."
+    - log_info "Setting up child pipeline generation environment"
     - ls -lta ./
     - apt-get update && apt-get install -y dos2unix
     - dos2unix $CI_PROJECT_DIR/scripts/generate-child-pipeline.sh
     - chmod +x $CI_PROJECT_DIR/scripts/generate-child-pipeline.sh
-    - echo "After dos2unix and chmod..."
+    - log_debug "Environment setup completed"
     - ls -lta ./
     - $CI_PROJECT_DIR/scripts/generate-child-pipeline.sh
-    - echo "Checking generated artifact..."
+    - log_info "Verifying generated artifact"
     - ls -la $CI_PROJECT_DIR/generated-child-pipeline.yml
-    - echo "Artifact content preview:"
+    - log_debug "Artifact content preview-"
     - head -20 $CI_PROJECT_DIR/generated-child-pipeline.yml
   artifacts:
     paths:

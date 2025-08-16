@@ -1,6 +1,10 @@
 # Static Child Pipeline Configuration
 # This pipeline is triggered from the parent pipeline with predefined jobs
 
+# Include echo functions
+include:
+  - local: '.gitlab/ci/echo.yml'
+
 stages:
   - child-validate
   - child-build
@@ -11,27 +15,30 @@ variables:
   CHILD_PIPELINE_TYPE: "static"
 
 # Inherit variables from parent
-before_script:
-  - echo "🔗 Child Pipeline (Static) - ID- $CI_PIPELINE_ID"
-  - echo "📋 Parent Pipeline ID- $PARENT_PIPELINE_ID"
-  - echo "🎯 Child Type- $CHILD_TYPE"
+default:
+  before_script:
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "🔗 Child Pipeline (Static) - ID- $CI_PIPELINE_ID"
+    - log_info "📋 Parent Pipeline ID- $PARENT_PIPELINE_ID"
+    - log_info "🎯 Child Type- $CHILD_TYPE"
 
 # Child pipeline validation
 child-validate-config:
   stage: child-validate
   script:
-    - echo "✅ Validating child pipeline configuration"
-    - echo "Checking inherited variables..."
-    - echo "Parent Pipeline- $PARENT_PIPELINE_ID"
-    - echo "Child Type- $CHILD_TYPE"
+    - log_info "✅ Validating child pipeline configuration"
+    - log_debug "Checking inherited variables..."
+    - log_debug "Parent Pipeline- $PARENT_PIPELINE_ID"
+    - log_debug "Child Type- $CHILD_TYPE"
 
 # Build tasks specific to this child pipeline
 child-build-component-a:
   stage: child-build
   script:
-    - echo "🔨 Building Component A in child pipeline"
+    - log_info "🔨 Building Component A in child pipeline"
     - mkdir -p child-artifacts/component-a
     - echo "Component A built at $(date)" > child-artifacts/component-a/build.log
+    - log_info "✅ Component A build completed"
   artifacts:
     paths:
       - child-artifacts/component-a/
@@ -40,9 +47,10 @@ child-build-component-a:
 child-build-component-b:
   stage: child-build
   script:
-    - echo "🔨 Building Component B in child pipeline"
+    - log_info "🔨 Building Component B in child pipeline"
     - mkdir -p child-artifacts/component-b
     - echo "Component B built at $(date)" > child-artifacts/component-b/build.log
+    - log_info "✅ Component B build completed"
   artifacts:
     paths:
       - child-artifacts/component-b/
@@ -52,10 +60,10 @@ child-build-component-b:
 child-test-unit:
   stage: child-test
   script:
-    - echo "🧪 Running unit tests in child pipeline"
-    - echo "Testing Component A..."
-    - echo "Testing Component B..."
-    - echo "✅ Unit tests passed"
+    - log_info "🧪 Running unit tests in child pipeline"
+    - log_debug "Testing Component A..."
+    - log_debug "Testing Component B..."
+    - log_info "✅ Unit tests passed"
   needs:
     - child-build-component-a
     - child-build-component-b
@@ -63,9 +71,9 @@ child-test-unit:
 child-test-integration:
   stage: child-test
   script:
-    - echo "🔗 Running integration tests in child pipeline"
-    - echo "Testing component interactions..."
-    - echo "✅ Integration tests passed"
+    - log_info "🔗 Running integration tests in child pipeline"
+    - log_debug "Testing component interactions..."
+    - log_info "✅ Integration tests passed"
   needs:
     - child-build-component-a
     - child-build-component-b
@@ -74,7 +82,7 @@ child-test-integration:
 child-generate-report:
   stage: child-report
   script:
-    - echo "📊 Generating child pipeline report"
+    - log_info "📊 Generating child pipeline report"
     - mkdir -p reports
     - |
       cat > reports/child-static-report.json << EOF
@@ -88,7 +96,8 @@ child-generate-report:
         "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
       }
       EOF
-    - echo "📄 Report generated: reports/child-static-report.json"
+    - log_info "📄 Report generated- reports/child-static-report.json"
+    - log_debug "Report content-"
     - cat reports/child-static-report.json
   artifacts:
     paths:

@@ -1,0 +1,10 @@
+# Standardized Echo Functions - Java-style Logging
+# Simple shell functions that can be used in both GitLab CI and shell scripts
+
+variables:
+  # Shell functions for standardized logging
+  ECHO_FUNCTIONS: |
+    log_error() { echo -e "\033[31m[ERROR] ❌ $1\033[0m"; }
+    log_warn() { echo -e "\033[33m[WARN] ⚠️ $1\033[0m"; }
+    log_info() { echo -e "\033[32m[INFO] ℹ️ $1\033[0m"; }
+    log_debug() { echo -e "\033[34m[DEBUG] 🔍 $1\033[0m"; }

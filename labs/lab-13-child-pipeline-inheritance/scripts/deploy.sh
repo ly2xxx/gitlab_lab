@@ -4,44 +4,50 @@
 
 set -e
 
+# Load standardized echo functions
+eval "$(echo 'log_error() { echo -e "\033[31m[ERROR] ❌ $1\033[0m"; }
+log_warn() { echo -e "\033[33m[WARN] ⚠️ $1\033[0m"; }
+log_info() { echo -e "\033[32m[INFO] ℹ️ $1\033[0m"; }
+log_debug() { echo -e "\033[34m[DEBUG] 🔍 $1\033[0m"; }')"
+
 ENVIRONMENT=${1:-staging}
 TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)
 
-echo "🚀 Starting deployment to $ENVIRONMENT environment"
-echo "📅 Deployment timestamp- $TIMESTAMP"
+log_info "🚀 Starting deployment to $ENVIRONMENT environment"
+log_debug "📅 Deployment timestamp- $TIMESTAMP"
 
 # Function to simulate deployment steps
 deploy_step() {
     local step_name=$1
     local duration=${2:-2}
-    echo "▶️ $step_name..."
+    log_info "▶️ $step_name..."
     sleep $duration
-    echo "✅ $step_name completed"
+    log_info "✅ $step_name completed"
 }
 
 # Environment-specific configurations
 case $ENVIRONMENT in
     "staging")
-        echo "🔧 Configuring for staging environment"
+        log_info "🔧 Configuring for staging environment"
         APP_URL="https://staging.example.com"
         REPLICAS=2
         RESOURCES="small"
         ;;
     "production")
-        echo "🔧 Configuring for production environment"
+        log_info "🔧 Configuring for production environment"
         APP_URL="https://production.example.com"
         REPLICAS=5
         RESOURCES="large"
         ;;
     "development")
-        echo "🔧 Configuring for development environment"
+        log_info "🔧 Configuring for development environment"
         APP_URL="https://dev.example.com"
         REPLICAS=1
         RESOURCES="minimal"
         ;;
     *)
-        echo "❌ Unknown environment- $ENVIRONMENT"
-        echo "Valid environments: staging, production, development"
+        log_error "❌ Unknown environment- $ENVIRONMENT"
+        log_error "Valid environments: staging, production, development"
         exit 1
         ;;
 esac
@@ -78,6 +84,6 @@ deploy_step "Verifying application health" 2
 deploy_step "Running smoke tests" 3
 deploy_step "Checking monitoring and alerts" 1
 
-echo "🎉 Deployment to $ENVIRONMENT completed successfully!"
-echo "🌐 Application available at- $APP_URL"
-echo "📊 Deployment summary written to deployment.env"
+log_info "🎉 Deployment to $ENVIRONMENT completed successfully!"
+log_info "🌐 Application available at- $APP_URL"
+log_info "📊 Deployment summary written to deployment.env"

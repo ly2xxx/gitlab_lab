@@ -4,14 +4,20 @@
 
 set -e
 
-echo "🧪 Starting integration test suite"
-echo "🔄 This test may occasionally fail to demonstrate retry mechanisms"
+# Load standardized echo functions
+eval "$(echo 'log_error() { echo -e "\033[31m[ERROR] ❌ $1\033[0m"; }
+log_warn() { echo -e "\033[33m[WARN] ⚠️ $1\033[0m"; }
+log_info() { echo -e "\033[32m[INFO] ℹ️ $1\033[0m"; }
+log_debug() { echo -e "\033[34m[DEBUG] 🔍 $1\033[0m"; }')"
+
+log_info "🧪 Starting integration test suite"
+log_warn "🔄 This test may occasionally fail to demonstrate retry mechanisms"
 
 # Simulate flaky behavior - fail randomly 30% of the time
 RANDOM_NUM=$(( RANDOM % 10 ))
 SHOULD_FAIL_RANDOMLY=$((RANDOM_NUM < 3))
 
-echo "🎲 Random factor- $RANDOM_NUM (fail if < 3)"
+log_debug "🎲 Random factor- $RANDOM_NUM (fail if < 3)"
 
 # Test configuration
 TESTS_TO_RUN=(
@@ -32,27 +38,27 @@ run_test() {
     local test_name=$1
     local test_duration=$(( (RANDOM % 3) + 1 ))
     
-    echo "▶️ Running test- $test_name"
+    log_info "▶️ Running test- $test_name"
     sleep $test_duration
     
     # Simulate test logic with occasional failures
     if [ $SHOULD_FAIL_RANDOMLY -eq 1 ] && [ "$test_name" == "external_service_integration" ]; then
-        echo "❌ Test failed- $test_name (simulated network timeout)"
+        log_error "❌ Test failed- $test_name (simulated network timeout)"
         FAILED_TESTS+=("$test_name")
         return 1
     elif [ $SHOULD_FAIL_RANDOMLY -eq 1 ] && [ "$test_name" == "message_queue_processing" ]; then
-        echo "❌ Test failed- $test_name (simulated queue overload)"
+        log_error "❌ Test failed- $test_name (simulated queue overload)"
         FAILED_TESTS+=("$test_name")
         return 1
     else
-        echo "✅ Test passed- $test_name"
+        log_info "✅ Test passed- $test_name"
         PASSED_TESTS+=("$test_name")
         return 0
     fi
 }
 
 # Main test execution
-echo "📋 Running ${#TESTS_TO_RUN[@]} integration tests..."
+log_info "📋 Running ${#TESTS_TO_RUN[@]} integration tests..."
 
 START_TIME=$(date +%s)
 
@@ -94,5 +100,5 @@ if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
     exit 1
 fi
 
-echo "🎉 All integration tests passed!"
-echo "✨ Integration test suite completed successfully"
+log_info "🎉 All integration tests passed!"
+log_info "✨ Integration test suite completed successfully"

@@ -4,7 +4,13 @@
 
 set -e
 
-echo "🔧 Generating dynamic child pipeline configuration..."
+# Load standardized echo functions
+eval "$(echo 'log_error() { echo -e "\033[31m[ERROR] ❌ $1\033[0m"; }
+log_warn() { echo -e "\033[33m[WARN] ⚠️ $1\033[0m"; }
+log_info() { echo -e "\033[32m[INFO] ℹ️ $1\033[0m"; }
+log_debug() { echo -e "\033[34m[DEBUG] 🔍 $1\033[0m"; }')"
+
+log_info "🔧 Generating dynamic child pipeline configuration..."
 
 # Initialize the pipeline file
 PIPELINE_FILE="$CI_PROJECT_DIR/generated-child-pipeline.yml"
@@ -48,7 +54,7 @@ dynamic-analyze-changes:
 EOF
 
 # Check for different types of changes and add corresponding jobs
-echo "📁 Analyzing repository changes..."
+log_info "📁 Analyzing repository changes..."
 
 # Function to add job to pipeline
 add_job() {
@@ -75,7 +81,7 @@ EOF
 
 # Check for frontend changes
 if [ -d "frontend" ] || ls *.html *.css *.js 2>/dev/null || [ -f "package.json" ]; then
-    echo "🎨 Frontend changes detected, adding frontend jobs..."
+    log_info "🎨 Frontend changes detected, adding frontend jobs..."
     
     add_job "dynamic-build-frontend" "dynamic-build" \
         "- echo '🎨 Building frontend components dynamically'
@@ -100,7 +106,7 @@ fi
 
 # Check for backend changes
 if [ -d "backend" ] || ls *.py *.java *.go 2>/dev/null || [ -f "requirements.txt" ] || [ -f "pom.xml" ]; then
-    echo "⚙️ Backend changes detected, adding backend jobs..."
+    log_info "⚙️ Backend changes detected, adding backend jobs..."
     
     add_job "dynamic-build-backend" "dynamic-build" \
         "- echo '⚙️ Building backend services dynamically'
@@ -173,18 +179,22 @@ dynamic-pipeline-summary:
     - when: always
 EOF
 
-echo "✅ Dynamic child pipeline configuration generated- $PIPELINE_FILE"
-echo "📄 Pipeline content:"
-echo "----------------------------------------"
+log_info "✅ Dynamic child pipeline configuration generated- $PIPELINE_FILE"
+log_debug "📄 Pipeline content:"
+log_debug "----------------------------------------"
 cat $PIPELINE_FILE
-echo "----------------------------------------"
+log_debug "----------------------------------------"
 
 # Validate the generated YAML (if yamllint is available)
 if command -v yamllint >/dev/null 2>&1; then
-    echo "🔍 Validating generated YAML..."
-    yamllint $PIPELINE_FILE && echo "✅ YAML validation passed" || echo "⚠️ YAML validation warnings"
+    log_info "🔍 Validating generated YAML..."
+    if yamllint $PIPELINE_FILE; then
+        log_info "✅ YAML validation passed"
+    else
+        log_warn "⚠️ YAML validation warnings"
+    fi
 else
-    echo "ℹ️ yamllint not available, skipping YAML validation"
+    log_warn "ℹ️ yamllint not available, skipping YAML validation"
 fi
 
-echo "🎉 Dynamic pipeline generation completed!"
+log_info "🎉 Dynamic pipeline generation completed!"
