@@ -32,7 +32,11 @@
       "Bash(log_debug \"🔍 Debug information\")",
       "Bash(log_info \"✅ Component logging functions work correctly\")",
       "Bash(log_debug \"Testing embedded script functionality\")",
-      "Bash(log_warn \"Component is ready for deployment\")"
+      "Bash(log_warn \"Component is ready for deployment\")",
+      "WebSearch",
+      "WebFetch(domain:about.gitlab.com)",
+      "WebFetch(domain:forum.gitlab.com)",
+      "WebFetch(domain:stackoverflow.com)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

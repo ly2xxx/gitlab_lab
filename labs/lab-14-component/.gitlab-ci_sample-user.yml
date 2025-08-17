@@ -1,4 +1,17 @@
+# Project includes approach - allows access to multiple files from external project
 include:
-  - component: host.docker.internal/root/gitlab-lab-11-git-ops/helloworld@main
-    inputs:
-      stage: "build"                    # Run component jobs in build stage
+  - project: 'root/gitlab-lab-11-git-ops'
+    ref: main
+    file: 'templates/helloworld.yml'      # Component template
+  - project: 'root/gitlab-lab-11-git-ops'  
+    ref: main
+    file: 'common-utils/echo.yml'         # Echo utilities dependency
+
+# Define required stages
+stages:
+  - build
+
+# include:
+#   - component: host.docker.internal/root/gitlab-lab-11-git-ops/helloworld@main
+#     inputs:
+#       stage: "build"                    # Run component jobs in build stage

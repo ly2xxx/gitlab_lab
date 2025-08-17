@@ -1,0 +1,42 @@
+# Standardized Echo/Logging Functions for GitLab CI/CD
+# Java-style logging with colored output and emojis
+# 
+# Usage:
+#   include:
+#     - local: '.gitlab/ci/echo.yml'
+#   
+#   job-name:
+#     script:
+#       - eval "$ECHO_FUNCTIONS"
+#       - log_info "Information message"
+#       - log_error "Error message"
+
+variables:
+  # Standardized echo functions for logging across all GitLab CI/CD pipelines
+  ECHO_FUNCTIONS: |
+    log_error() { echo -e "\033[31m[ERROR] ❌ $1\033[0m"; }
+    log_warn() { echo -e "\033[33m[WARN] ⚠️ $1\033[0m"; }
+    log_info() { echo -e "\033[32m[INFO] ℹ️ $1\033[0m"; }
+    log_debug() { echo -e "\033[34m[DEBUG] 🔍 $1\033[0m"; }
+
+# Optional: Default before_script to load logging functions automatically
+# Uncomment if you want logging functions available in all jobs by default
+#
+# default:
+#   before_script:
+#     - eval "$ECHO_FUNCTIONS"
+
+# Example job showing how to use the logging functions
+.echo-example:
+  script:
+    # Load the logging functions (required in each job)
+    - eval "$ECHO_FUNCTIONS"
+    
+    # Use standardized logging
+    - log_info "🚀 Starting process"
+    - log_debug "Debug information here"
+    - log_warn "Warning about something"
+    - log_error "Error occurred"
+    
+    # Regular echo still works
+    - echo "Regular echo output"

@@ -4,8 +4,12 @@ spec:
       default: build
 
 ---
+# Note: This template requires echo.yml to be included separately by the consumer
+# See .gitlab-ci_sample-user.yml for proper usage with project includes
+
 hello:
   stage: $[[ inputs.stage ]]
   image: alpine
   script:
-    - echo "hello world!"
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "hello world!"
