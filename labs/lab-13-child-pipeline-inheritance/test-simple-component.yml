@@ -1,0 +1,11 @@
+# Test simple component with exact same inputs
+include:
+  - component: host.docker.internal/root/gitlab-lab-11-git-ops/child-pipeline-inheritance@main
+    inputs:
+      stage: "maintenance"
+      enable_backend_build: "true"
+      enable_validation: "true"
+      docker_image: "ubuntu:22.04"
+
+stages:
+  - maintenance
