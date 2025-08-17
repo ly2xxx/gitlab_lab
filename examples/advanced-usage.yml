@@ -1,0 +1,177 @@
+# Advanced Usage Example: Child Pipeline Inheritance Component
+# This example shows full customization with all available inputs
+
+include:
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/child-pipeline-inheritance@v1.0.0
+    inputs:
+      stage: "build"                    # Run component jobs in build stage
+      enable_backend_build: "true"      # Enable backend building
+      enable_validation: "true"         # Enable syntax validation
+      docker_image: "ubuntu:22.04"      # Use specific Ubuntu version
+
+# Define all stages including the one used by the component
+stages:
+  - validate
+  - build      # Component jobs run here (matches inputs.stage)
+  - test
+  - security
+  - deploy
+
+# Project-specific variables
+variables:
+  PROJECT_NAME: "advanced-microservice"
+  BUILD_VERSION: "2.1.0"
+  DOCKER_REGISTRY: "$CI_REGISTRY"
+  SECURITY_SCAN_ENABLED: "true"
+
+# Custom validation job (runs alongside component-validate-syntax)
+lint-code:
+  stage: validate
+  image: node:18-alpine
+  script:
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "🔍 Running code linting"
+    - npm install
+    - npm run lint
+    - log_info "✅ Code linting completed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Custom testing job
+test-integration:
+  stage: test
+  image: node:18
+  services:
+    - postgres:13
+    - redis:6
+  script:
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "🧪 Running integration tests for $PROJECT_NAME"
+    - log_debug "Database: PostgreSQL 13"
+    - log_debug "Cache: Redis 6"
+    
+    # Setup test environment
+    - npm install
+    - npm run test:setup
+    
+    # Run tests
+    - npm run test:integration
+    - npm run test:e2e
+    
+    - log_info "✅ All integration tests passed"
+  artifacts:
+    reports:
+      junit: test-results.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+    paths:
+      - coverage/
+    expire_in: 1 week
+  coverage: '/Coverage: \d+\.\d+%/'
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Security scanning job
+security-scan:
+  stage: security
+  image: securecodewarrior/gitlab-sast:latest
+  script:
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "🔒 Running security analysis"
+    - log_debug "SAST enabled: $SECURITY_SCAN_ENABLED"
+    
+    # Run security scans
+    - /analyzer run
+    
+    - log_info "✅ Security scan completed"
+  artifacts:
+    reports:
+      sast: gl-sast-report.json
+  rules:
+    - if: $SECURITY_SCAN_ENABLED == "true"
+
+# Multi-environment deployment
+deploy-staging:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "🚀 Deploying $PROJECT_NAME v$BUILD_VERSION to staging"
+    - log_debug "Registry: $DOCKER_REGISTRY"
+    
+    # Deploy to staging
+    - apk add --no-cache curl
+    - curl -X POST "$STAGING_DEPLOY_WEBHOOK" -d "version=$BUILD_VERSION"
+    
+    - log_info "✅ Staging deployment completed"
+  environment:
+    name: staging
+    url: https://staging-advanced-microservice.example.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+
+deploy-production:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "🚀 Deploying $PROJECT_NAME v$BUILD_VERSION to production"
+    - log_debug "This is a production deployment - extra validation required"
+    
+    # Validate production deployment
+    - test -n "$PRODUCTION_DEPLOY_KEY" || (log_error "Production deploy key required" && exit 1)
+    
+    # Deploy to production
+    - apk add --no-cache curl
+    - curl -X POST "$PRODUCTION_DEPLOY_WEBHOOK" \
+        -H "Authorization: Bearer $PRODUCTION_DEPLOY_KEY" \
+        -d "version=$BUILD_VERSION"
+    
+    # Run smoke tests
+    - log_debug "Running post-deployment smoke tests..."
+    - curl -f "https://advanced-microservice.example.com/health" || (log_error "Health check failed" && exit 1)
+    
+    - log_info "✅ Production deployment completed successfully"
+  environment:
+    name: production
+    url: https://advanced-microservice.example.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  dependencies:
+    - test-integration
+    - security-scan
+
+# Notification job (runs after everything)
+notify-completion:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - eval "$ECHO_FUNCTIONS"
+    - log_info "📊 Pipeline completed for $PROJECT_NAME"
+    - log_info "Build version: $BUILD_VERSION"
+    - log_info "Pipeline ID: $CI_PIPELINE_ID"
+    - log_info "Commit: $CI_COMMIT_SHA"
+    
+    # Send notification (example)
+    - |
+      if [ "$CI_JOB_STATUS" = "success" ]; then
+        log_info "🎉 All jobs completed successfully!"
+      else
+        log_warn "⚠️ Some jobs may have failed - check pipeline status"
+      fi
+  rules:
+    - when: always
+
+# The component will generate and trigger a child pipeline that includes:
+# - dynamic-analyze-changes: Always runs to analyze repository changes
+# - dynamic-build-frontend: If frontend files detected
+# - dynamic-build-backend: If backend files detected  
+# - dynamic-build-infrastructure: If Docker/K8s files detected
+# - dynamic-deploy-production: If main branch (manual trigger)
+# - dynamic-pipeline-summary: Always runs at the end

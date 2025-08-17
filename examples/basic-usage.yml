@@ -1,0 +1,44 @@
+# Basic Usage Example: Child Pipeline Inheritance Component
+# This is the simplest way to include the component in your project
+
+include:
+  - component: host.docker.internal/root/gitlab-lab-11-git-ops/child-pipeline-inheritance@main
+  # - component: $CI_SERVER_FQDN/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/child-pipeline-inheritance@v1.0.0
+
+# Define the stage where component jobs will run
+stages:
+  - maintenance
+
+# Your project variables (optional)
+variables:
+  PROJECT_NAME: "my-basic-project"
+  VERSION: "1.0.0"
+
+# The component will automatically add these jobs:
+# 1. component-validate-syntax (if enable_validation: "true")
+# 2. component-backend-build (if enable_backend_build: "true" and backend changes detected)  
+# 3. component-generate-child-pipeline (always runs)
+# 4. component-trigger-dynamic-child (always runs after generation)
+
+# Your custom jobs can use the component's logging functions
+custom-deploy:
+  stage: maintenance
+  script:
+    # Load the standardized logging functions
+    - eval "$ECHO_FUNCTIONS"
+    
+    # Use Java-style logging
+    - log_info "🚀 Starting deployment for $PROJECT_NAME v$VERSION"
+    - log_debug "Environment- ${CI_ENVIRONMENT_NAME:-development}"
+    
+    # Your deployment logic here
+    - echo "Deploying application..."
+    - sleep 2
+    
+    - log_info "✅ Deployment completed successfully"
+  environment:
+    name: production
+    url: https://my-basic-project.example.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
