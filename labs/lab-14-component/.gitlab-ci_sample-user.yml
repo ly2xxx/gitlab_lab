@@ -1,0 +1,4 @@
+include:
+  - component: host.docker.internal/root/gitlab-lab-11-git-ops/helloworld@main
+    inputs:
+      stage: "build"                    # Run component jobs in build stage

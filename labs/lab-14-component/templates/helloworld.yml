@@ -1,0 +1,11 @@
+spec:
+  inputs:
+    stage:
+      default: build
+
+---
+hello:
+  stage: $[[ inputs.stage ]]
+  image: alpine
+  script:
+    - echo "hello world!"
