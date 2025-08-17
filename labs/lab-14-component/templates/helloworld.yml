@@ -4,8 +4,10 @@ spec:
       default: build
 
 ---
-# Note: This template requires echo.yml to be included separately by the consumer
-# See .gitlab-ci_sample-user.yml for proper usage with project includes
+include:
+  - project: 'root/gitlab-lab-11-git-ops'  
+    ref: main
+    file: 'common-utils/echo.yml'         # Echo utilities dependency
 
 hello:
   stage: $[[ inputs.stage ]]
