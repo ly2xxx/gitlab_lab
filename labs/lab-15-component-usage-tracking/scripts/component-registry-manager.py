@@ -22,7 +22,8 @@ from typing import Dict, List, Optional, Any
 from pathlib import Path
 
 # Add parent directory to path for importing shared modules
-sys.path.append(str(Path(__file__).parent.parent.parent / "lab-11-git-ops" / "python"))
+# sys.path.append(str(Path(__file__).parent.parent.parent / "lab-11-git-ops" / "python"))
+sys.path.append(str(Path(__file__).parent.parent.parent / "labs" / "lab-11-git-ops" / "python"))
 
 try:
     from gitlab_api import GitLabAPI
