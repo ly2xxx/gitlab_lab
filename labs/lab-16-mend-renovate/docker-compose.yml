@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  renovate-ce:
+    image: ghcr.io/mend/renovate-ce:8.0.0-full
+    container_name: renovate-ce
+    restart: unless-stopped
+    ports:
+      - "8090:8080"  # Avoid conflict with GitLab CE on port 8080
+    env_file:
+      - .env
+    environment:
+      # Core Configuration
+      - MEND_RNV_ACCEPT_TOS=${MEND_RNV_ACCEPT_TOS}
+      - MEND_RNV_LICENSE_KEY=${MEND_RNV_LICENSE_KEY}
+      - MEND_RNV_PLATFORM=${MEND_RNV_PLATFORM}
+      - MEND_RNV_ENDPOINT=${MEND_RNV_ENDPOINT}
+      - MEND_RNV_SERVER_PORT=${MEND_RNV_SERVER_PORT}
+      
+      # Authentication
+      - MEND_RNV_GITLAB_PAT=${MEND_RNV_GITLAB_PAT}
+      - GITHUB_COM_TOKEN=${GITHUB_COM_TOKEN}
+      
+      # Webhook Configuration
+      - MEND_RNV_WEBHOOK_SECRET=${MEND_RNV_WEBHOOK_SECRET}
+      - MEND_RNV_WEBHOOK_URL=${MEND_RNV_WEBHOOK_URL}
+      
+      # Admin API
+      - MEND_RNV_ADMIN_API_ENABLED=${MEND_RNV_ADMIN_API_ENABLED}
+      - MEND_RNV_SERVER_API_SECRET=${MEND_RNV_SERVER_API_SECRET}
+      
+      # Scheduling and Performance
+      - MEND_RNV_CRON_JOB_SCHEDULER=${MEND_RNV_CRON_JOB_SCHEDULER}
+      - MEND_RNV_WORKER_EXECUTION_TIMEOUT=3600000
+      - LOG_LEVEL=info
+      
+      # Optional: Database configuration for production
+      # - MEND_RNV_DB_TYPE=postgresql
+      # - MEND_RNV_DB_HOST=postgres
+      # - MEND_RNV_DB_PORT=5432
+      # - MEND_RNV_DB_NAME=renovate
+      # - MEND_RNV_DB_USER=renovate
+      # - MEND_RNV_DB_PASSWORD=renovate_password
+      
+    volumes:
+      # Configuration and logs
+      - ./renovate/config.js:/usr/src/app/config.js:ro
+      - ./renovate/logs:/tmp/renovate/logs
+      # SSH keys if needed
+      # - ~/.ssh:/home/ubuntu/.ssh:ro
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    networks:
+      - renovate-network
+
+  # Optional: PostgreSQL database for production use
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: renovate-postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_DB: renovate
+  #     POSTGRES_USER: renovate
+  #     POSTGRES_PASSWORD: renovate_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - renovate-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U renovate -d renovate"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+networks:
+  renovate-network:
+    driver: bridge
+
+# volumes:
+#   postgres_data:
+#     driver: local

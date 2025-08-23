@@ -1,0 +1,216 @@
+# GitLab CI/CD Pipeline for Renovate Test Project
+# Demonstrates integration with Mend Renovate Community Edition
+
+stages:
+  - validate
+  - test
+  - security
+  - build
+  - deploy
+
+variables:
+  NODE_VERSION: "18"
+  NPM_CACHE_FOLDER: ".npm"
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# Cache configuration for faster builds
+cache:
+  key: 
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+    - .npm/
+
+# Template for Node.js jobs
+.node-job: &node-job
+  image: node:${NODE_VERSION}
+  before_script:
+    - npm ci --cache $NPM_CACHE_FOLDER --prefer-offline
+  cache:
+    key: 
+      files:
+        - package-lock.json
+    paths:
+      - node_modules/
+      - .npm/
+
+# Validate dependencies and security
+validate-dependencies:
+  <<: *node-job
+  stage: validate
+  script:
+    - echo "🔍 Validating package.json and lock file..."
+    - npm ls --depth=0
+    - echo "🔒 Running security audit..."
+    - npm audit --audit-level=moderate --json > audit-report.json || true
+    - npm audit --audit-level=high
+    - echo "📋 Checking for lockfile consistency..."
+    - npx lockfile-lint --path package-lock.json --validate-https --allowed-hosts npm
+  artifacts:
+    reports:
+      # GitLab can parse this for security dashboard
+      dependency_scanning: audit-report.json
+    paths:
+      - audit-report.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Validate Renovate configuration
+validate-renovate-config:
+  image: renovate/renovate:latest
+  stage: validate
+  script:
+    - echo "🤖 Validating renovate.json configuration..."
+    - renovate-config-validator renovate.json
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - renovate.json
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - renovate.json
+
+# Run tests
+test:
+  <<: *node-job
+  stage: test
+  script:
+    - echo "🧪 Running tests..."
+    - npm test
+    - echo "🔍 Running linting..."
+    - npm run lint
+    - echo "📊 Generating coverage report..."
+    - npm run test:coverage
+  coverage: '/Lines\s*:\s*(\d+\.\d+)%/'
+  artifacts:
+    reports:
+      junit: junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+    paths:
+      - coverage/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Security scanning with Semgrep
+security-scan:
+  stage: security
+  image: 
+    name: returntocorp/semgrep-agent:v1
+    entrypoint: [""]
+  variables:
+    SEMGREP_RULES: "auto"
+  script:
+    - echo "🛡️ Running security analysis..."
+    - semgrep-agent --config=auto --json --output=semgrep-report.json || true
+    - semgrep-agent --config=auto
+  artifacts:
+    reports:
+      sast: semgrep-report.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Build Docker image
+build-docker:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - docker info
+  script:
+    - echo "🐳 Building Docker image..."
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA .
+    - docker build -t $CI_REGISTRY_IMAGE:latest .
+    - echo "📋 Image built successfully"
+    - docker images
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Deploy to development (example)
+deploy-dev:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - echo "🚀 Deploying to development environment..."
+    - echo "Application deployed successfully!"
+    - echo "🔗 Dev URL: http://localhost:3000"
+  environment:
+    name: development
+    url: http://localhost:3000
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Special job to handle Renovate PRs
+renovate-auto-approve:
+  stage: validate
+  image: alpine/git
+  script:
+    - echo "🤖 Processing Renovate merge request..."
+    - echo "Source branch: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+    - echo "Author: $GITLAB_USER_LOGIN"
+    - |
+      if [ "$GITLAB_USER_LOGIN" = "renovate-bot" ]; then
+        echo "✅ This is a Renovate MR - could auto-approve minor/patch updates"
+        # Add logic here to auto-approve based on update type
+        # This would typically use GitLab API to approve the MR
+      else
+        echo "👤 Regular user MR - normal review process"
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_USER_LOGIN == "renovate-bot"
+  when: manual
+  allow_failure: true
+
+# Cleanup job for merge requests
+cleanup-mr:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - echo "🧹 Cleaning up merge request artifacts..."
+    - echo "MR cleanup completed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+  when: always
+
+# Notification job (example)
+notify-completion:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - echo "📢 Pipeline completed successfully!"
+    - echo "Commit: $CI_COMMIT_SHA"
+    - echo "Branch: $CI_COMMIT_REF_NAME"
+    - echo "Pipeline URL: $CI_PIPELINE_URL"
+    # Example: Send notification to Slack, Teams, etc.
+    # - 'curl -X POST -H "Content-type: application/json" --data "{\"text\":\"Pipeline completed for $CI_PROJECT_NAME\"}" $SLACK_WEBHOOK_URL'
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+  when: on_success
+
+# Job that runs only on schedule (could be used for maintenance)
+scheduled-maintenance:
+  <<: *node-job
+  stage: validate
+  script:
+    - echo "🔧 Running scheduled maintenance..."
+    - npm audit fix --dry-run
+    - echo "Maintenance check completed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"

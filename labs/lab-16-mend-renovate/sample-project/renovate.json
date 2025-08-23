@@ -1,0 +1,153 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate configuration for test project demonstrating GitLab integration",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":separateMajorReleases",
+    "group:monorepos",
+    "group:recommended",
+    "workarounds:all"
+  ],
+  "platform": "gitlab",
+  "gitlabUrl": "http://localhost:8080",
+  "labels": ["renovate", "dependencies"],
+  "assignees": ["@renovate-bot"],
+  "reviewers": ["@root"],
+  "timezone": "UTC",
+  "schedule": [
+    "after 10pm every weekday",
+    "before 5am every weekday", 
+    "every weekend"
+  ],
+  "packageRules": [
+    {
+      "description": "Auto-merge non-major updates for production dependencies",
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "addLabels": ["auto-merge"]
+    },
+    {
+      "description": "Auto-merge all devDependencies updates",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "addLabels": ["auto-merge", "dev-deps"]
+    },
+    {
+      "description": "Group ESLint packages together",
+      "matchPackageNames": ["eslint"],
+      "matchPackagePatterns": ["^eslint-"],
+      "groupName": "ESLint and plugins",
+      "addLabels": ["linting"]
+    },
+    {
+      "description": "Group Jest testing packages",
+      "matchPackageNames": ["jest"],
+      "matchPackagePatterns": ["^jest-", "^@types/jest"],
+      "groupName": "Jest testing framework",
+      "addLabels": ["testing"]
+    },
+    {
+      "description": "Handle major dependency updates with special care",
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["major-update", "needs-review"],
+      "reviewers": ["@root"],
+      "automerge": false,
+      "schedule": ["before 5am on monday"],
+      "commitMessagePrefix": "feat(deps)!:"
+    },
+    {
+      "description": "Security updates get priority",
+      "matchPackagePatterns": [".*"],
+      "matchCurrentVersion": "!/^0/",
+      "vulnerabilityAlerts": true,
+      "schedule": ["at any time"],
+      "addLabels": ["security", "priority"],
+      "reviewers": ["@root"],
+      "automerge": false
+    },
+    {
+      "description": "Pin Docker images to specific versions",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["docker", "major"],
+      "automerge": false
+    },
+    {
+      "description": "Update Docker images monthly",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "schedule": ["before 6am on the first day of the month"],
+      "addLabels": ["docker"]
+    }
+  ],
+  "prConcurrentLimit": 5,
+  "branchConcurrentLimit": 10,
+  "rebaseWhen": "behind-base-branch",
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "🤖 Dependency Dashboard",
+  "dependencyDashboardHeader": "This issue lists Renovate updates and detected dependencies. Read the [Dependency Dashboard](https://docs.renovatebot.com/key-concepts/dashboard/) docs to learn more.",
+  "dependencyDashboardLabels": ["renovate", "dashboard"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"],
+    "commitMessageAction": "Lock file maintenance",
+    "addLabels": ["lockfile-maintenance"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "addLabels": ["security", "vulnerability"]
+  },
+  "osvVulnerabilityAlerts": true,
+  "rangeStrategy": "bump",
+  "bumpVersion": "patch",
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "commitMessagePrefix": "chore(deps):",
+  "commitMessageAction": "Update",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "to {{#if isSingleVersion}}v{{{newVersion}}}{{else}}{{{newValue}}}{{/if}}",
+  "prTitle": "{{commitMessagePrefix}} {{commitMessageAction}} {{commitMessageTopic}} {{commitMessageExtra}}",
+  "prBodyTemplate": "{{{header}}}{{{table}}}{{{notes}}}{{{changelogs}}}{{{configDescription}}}{{{controls}}}",
+  "branchPrefix": "renovate/",
+  "branchTopic": "{{depNameSanitized}}-{{newMajor}}{{#if separateMinorPatch}}.{{newMinor}}{{/if}}.x{{#if isLockfileUpdate}}-lockfile{{/if}}",
+  "enabledManagers": [
+    "npm",
+    "dockerfile",
+    "docker-compose",
+    "github-actions"
+  ],
+  "ignorePresets": [
+    ":prHourlyLimit2"
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    "coverage/**",
+    ".git/**"
+  ],
+  "includePaths": [
+    "**"
+  ],
+  "postUpdateOptions": [
+    "npmDedupe"
+  ],
+  "prCreation": "immediate",
+  "prNotPendingHours": 24,
+  "stabilityDays": 3,
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "extractVersion": "^(?<version>\\d+\\.\\d+\\.\\d+)",
+  "respectLatest": true,
+  "rollbackPrs": true
+}
