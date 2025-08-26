@@ -166,7 +166,7 @@ function Write-Progress {
         Write-Progress -Activity $Activity -Status $Status
     }
     
-    Write-Log "$Activity - $Status" "INFO"
+    # Removed Write-Log call to prevent infinite recursion
 }
 
 function Initialize-EventFile {
@@ -257,17 +257,22 @@ function Update-EventStatistics {
 function Get-CriticalSystemEvents {
     <#
     .SYNOPSIS
-        Collect critical and error events from System log using streaming
+        Collect critical and error events from System log using streaming or in-memory collection
     #>
     param(
-        [string]$FileName = "System_Critical_Errors"
+        [string]$FileName = ""
     )
     
-    Write-Progress -Activity "Collecting System Events" -Status "Streaming System log critical/error events"
+    Write-Progress -Activity "Collecting System Events" -Status "Collecting System log critical/error events"
     
-    # Initialize streaming file with headers
+    # Initialize streaming file with headers (only for CSV format)
     $headers = @("TimeCreated", "Id", "LevelDisplayName", "LogName", "ProviderName", "Message", "Description", "MachineName", "UserId", "ProcessId", "ThreadId")
-    Initialize-EventFile -FileName $FileName -Headers $headers
+    if ($FileName -and ($Format -eq "All" -or $Format -eq "CSV")) {
+        Initialize-EventFile -FileName $FileName -Headers $headers
+    }
+    
+    # Array to collect events for non-CSV formats
+    $collectedEvents = @()
     
     $startTime = (Get-Date).AddHours(-$TimeRange)
     $eventCount = 0
@@ -298,7 +303,7 @@ function Get-CriticalSystemEvents {
 <QueryList>
     <Query Id="0" Path="System">
         <Select Path="System">
-            *[System[Level=1 or Level=2] and System[TimeCreated[@SystemTime&gt;='$($startTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.000Z"))'] and System[TimeCreated[@SystemTime&lt;'$($oldestEventTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.000Z"))']]]]]
+            *[System[Level=1 or Level=2] and System[TimeCreated[@SystemTime&gt;='$($startTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.000Z"))'] and System[TimeCreated[@SystemTime&lt;'$($oldestEventTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.000Z"))']]]]
         </Select>
     </Query>
 </QueryList>
@@ -337,8 +342,13 @@ function Get-CriticalSystemEvents {
                         ThreadId = $event.ThreadId
                     }
                     
-                    # Stream event to file immediately
-                    Write-EventToFile -FileName $FileName -EventObject $eventObject
+                    # Stream event to file immediately (only for CSV format)
+                    if ($FileName -and ($Format -eq "All" -or $Format -eq "CSV")) {
+                        Write-EventToFile -FileName $FileName -EventObject $eventObject
+                    } else {
+                        # Collect in memory for other formats
+                        $collectedEvents += $eventObject
+                    }
                     
                     # Update statistics
                     Update-EventStatistics -EventType "SystemEvents" -Level $event.LevelDisplayName
@@ -365,7 +375,7 @@ function Get-CriticalSystemEvents {
             }
         }
         
-        Write-Log "Streamed $eventCount system events to file using batch processing" "SUCCESS"
+        Write-Log "Collected $eventCount system events using batch processing" "SUCCESS"
         
     } catch {
         if ($_.Exception.Message -notlike "*No events were found*") {
@@ -375,23 +385,32 @@ function Get-CriticalSystemEvents {
         }
     }
     
-    return $eventCount
+    if ($FileName) {
+        return $eventCount
+    } else {
+        return $collectedEvents
+    }
 }
 
 function Get-CriticalApplicationEvents {
     <#
     .SYNOPSIS
-        Collect critical and error events from Application log using streaming
+        Collect critical and error events from Application log using streaming or in-memory collection
     #>
     param(
-        [string]$FileName = "Application_Errors"
+        [string]$FileName = ""
     )
     
-    Write-Progress -Activity "Collecting Application Events" -Status "Streaming Application log critical/error events"
+    Write-Progress -Activity "Collecting Application Events" -Status "Collecting Application log critical/error events"
     
-    # Initialize streaming file with headers
+    # Initialize streaming file with headers (only for CSV format)
     $headers = @("TimeCreated", "Id", "LevelDisplayName", "LogName", "ProviderName", "Message", "Description", "MachineName", "UserId", "ProcessId", "ThreadId")
-    Initialize-EventFile -FileName $FileName -Headers $headers
+    if ($FileName -and ($Format -eq "All" -or $Format -eq "CSV")) {
+        Initialize-EventFile -FileName $FileName -Headers $headers
+    }
+    
+    # Array to collect events for non-CSV formats
+    $collectedEvents = @()
     
     $startTime = (Get-Date).AddHours(-$TimeRange)
     $eventCount = 0
@@ -422,7 +441,7 @@ function Get-CriticalApplicationEvents {
 <QueryList>
     <Query Id="0" Path="Application">
         <Select Path="Application">
-            *[System[Level=1 or Level=2] and System[TimeCreated[@SystemTime&gt;='$($startTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.000Z"))'] and System[TimeCreated[@SystemTime&lt;'$($oldestEventTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.000Z"))']]]]]
+            *[System[Level=1 or Level=2] and System[TimeCreated[@SystemTime&gt;='$($startTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.000Z"))'] and System[TimeCreated[@SystemTime&lt;'$($oldestEventTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.000Z"))']]]]
         </Select>
     </Query>
 </QueryList>
@@ -461,8 +480,13 @@ function Get-CriticalApplicationEvents {
                         ThreadId = $event.ThreadId
                     }
                     
-                    # Stream event to file immediately
-                    Write-EventToFile -FileName $FileName -EventObject $eventObject
+                    # Stream event to file immediately (only for CSV format)
+                    if ($FileName -and ($Format -eq "All" -or $Format -eq "CSV")) {
+                        Write-EventToFile -FileName $FileName -EventObject $eventObject
+                    } else {
+                        # Collect in memory for other formats
+                        $collectedEvents += $eventObject
+                    }
                     
                     # Update statistics
                     Update-EventStatistics -EventType "ApplicationEvents" -Level $event.LevelDisplayName
@@ -489,7 +513,7 @@ function Get-CriticalApplicationEvents {
             }
         }
         
-        Write-Log "Streamed $eventCount application events to file using batch processing" "SUCCESS"
+        Write-Log "Collected $eventCount application events using batch processing" "SUCCESS"
         
     } catch {
         if ($_.Exception.Message -notlike "*No events were found*") {
@@ -499,23 +523,34 @@ function Get-CriticalApplicationEvents {
         }
     }
     
+    if ($FileName) {
+        return $eventCount
+    } else {
+        return $collectedEvents
+    }
+    
     return $eventCount
 }
 
 function Get-KernelPowerEvents {
     <#
     .SYNOPSIS
-        Collect Kernel-Power events (Event ID 41) indicating unexpected shutdowns using streaming
+        Collect Kernel-Power events (Event ID 41) indicating unexpected shutdowns
     #>
     param(
-        [string]$FileName = "Kernel_Power_Events"
+        [string]$FileName = ""
     )
     
-    Write-Progress -Activity "Collecting Kernel-Power Events" -Status "Streaming unexpected shutdown events (Event ID 41)"
+    Write-Progress -Activity "Collecting Kernel-Power Events" -Status "Collecting unexpected shutdown events (Event ID 41)"
     
-    # Initialize streaming file with headers
+    # Initialize streaming file with headers (only for CSV format)
     $headers = @("TimeCreated", "Id", "LevelDisplayName", "LogName", "ProviderName", "Message", "Description", "MachineName", "BugCheckCode", "BugCheckParameter1", "BugCheckParameter2", "BugCheckParameter3", "BugCheckParameter4")
-    Initialize-EventFile -FileName $FileName -Headers $headers
+    if ($FileName -and ($Format -eq "All" -or $Format -eq "CSV")) {
+        Initialize-EventFile -FileName $FileName -Headers $headers
+    }
+    
+    # Array to collect events for non-CSV formats
+    $collectedEvents = @()
     
     $startTime = (Get-Date).AddHours(-$TimeRange)
     $eventCount = 0
@@ -544,15 +579,20 @@ function Get-KernelPowerEvents {
                 BugCheckParameter4 = "N/A"
             }
             
-            # Stream event to file immediately
-            Write-EventToFile -FileName $FileName -EventObject $eventObject
+            # Stream event to file immediately (only for CSV format)
+            if ($FileName -and ($Format -eq "All" -or $Format -eq "CSV")) {
+                Write-EventToFile -FileName $FileName -EventObject $eventObject
+            } else {
+                # Collect in memory for other formats
+                $collectedEvents += $eventObject
+            }
             
             # Update statistics
             Update-EventStatistics -EventType "KernelPowerEvents" -Level $event.LevelDisplayName
             $eventCount++
         }
         
-        Write-Log "Streamed $eventCount Kernel-Power events (Event ID 41) to file" "SUCCESS"
+        Write-Log "Collected $eventCount Kernel-Power events (Event ID 41)" "SUCCESS"
         
     } catch {
         if ($_.Exception.Message -notlike "*No events were found*") {
@@ -562,23 +602,32 @@ function Get-KernelPowerEvents {
         }
     }
     
-    return $eventCount
+    if ($FileName) {
+        return $eventCount
+    } else {
+        return $collectedEvents
+    }
 }
 
 function Get-BugCheckEvents {
     <#
     .SYNOPSIS
-        Collect BugCheck events (Event ID 1001) indicating system crashes/BSODs using streaming
+        Collect BugCheck events (Event ID 1001) indicating system crashes/BSODs
     #>
     param(
-        [string]$FileName = "BugCheck_Events"
+        [string]$FileName = ""
     )
     
-    Write-Progress -Activity "Collecting BugCheck Events" -Status "Streaming system crash events (Event ID 1001)"
+    Write-Progress -Activity "Collecting BugCheck Events" -Status "Collecting system crash events (Event ID 1001)"
     
-    # Initialize streaming file with headers
+    # Initialize streaming file with headers (only for CSV format)
     $headers = @("TimeCreated", "Id", "LevelDisplayName", "LogName", "ProviderName", "Message", "Description", "MachineName", "BugCheckCode", "BugCheckParameter1", "BugCheckParameter2", "BugCheckParameter3", "BugCheckParameter4")
-    Initialize-EventFile -FileName $FileName -Headers $headers
+    if ($FileName -and ($Format -eq "All" -or $Format -eq "CSV")) {
+        Initialize-EventFile -FileName $FileName -Headers $headers
+    }
+    
+    # Array to collect events for non-CSV formats
+    $collectedEvents = @()
     
     $startTime = (Get-Date).AddHours(-$TimeRange)
     $eventCount = 0
@@ -628,15 +677,20 @@ function Get-BugCheckEvents {
                 BugCheckParameter4 = $param4
             }
             
-            # Stream event to file immediately
-            Write-EventToFile -FileName $FileName -EventObject $eventObject
+            # Stream event to file immediately (only for CSV format)
+            if ($FileName -and ($Format -eq "All" -or $Format -eq "CSV")) {
+                Write-EventToFile -FileName $FileName -EventObject $eventObject
+            } else {
+                # Collect in memory for other formats
+                $collectedEvents += $eventObject
+            }
             
             # Update statistics
             Update-EventStatistics -EventType "BugCheckEvents" -Level $event.LevelDisplayName
             $eventCount++
         }
         
-        Write-Log "Streamed $eventCount BugCheck events (Event ID 1001) to file" "SUCCESS"
+        Write-Log "Collected $eventCount BugCheck events (Event ID 1001)" "SUCCESS"
         
     } catch {
         if ($_.Exception.Message -notlike "*No events were found*") {
@@ -646,23 +700,32 @@ function Get-BugCheckEvents {
         }
     }
     
-    return $eventCount
+    if ($FileName) {
+        return $eventCount
+    } else {
+        return $collectedEvents
+    }
 }
 
 function Get-HardwareEvents {
     <#
     .SYNOPSIS
-        Collect hardware-related events that might indicate system instability using streaming
+        Collect hardware-related events that might indicate system instability
     #>
     param(
-        [string]$FileName = "Hardware_Events"
+        [string]$FileName = ""
     )
     
-    Write-Progress -Activity "Collecting Hardware Events" -Status "Streaming hardware-related errors"
+    Write-Progress -Activity "Collecting Hardware Events" -Status "Collecting hardware-related errors"
     
-    # Initialize streaming file with headers
+    # Initialize streaming file with headers (only for CSV format)
     $headers = @("TimeCreated", "Id", "LevelDisplayName", "LogName", "ProviderName", "Message", "Description", "MachineName", "UserId", "ProcessId", "ThreadId")
-    Initialize-EventFile -FileName $FileName -Headers $headers
+    if ($FileName -and ($Format -eq "All" -or $Format -eq "CSV")) {
+        Initialize-EventFile -FileName $FileName -Headers $headers
+    }
+    
+    # Array to collect events for non-CSV formats
+    $collectedEvents = @()
     
     $startTime = (Get-Date).AddHours(-$TimeRange)
     $eventCount = 0
@@ -702,8 +765,13 @@ function Get-HardwareEvents {
                         ThreadId = $event.ThreadId
                     }
                     
-                    # Stream event to file immediately
-                    Write-EventToFile -FileName $FileName -EventObject $eventObject
+                    # Stream event to file immediately (only for CSV format)
+                    if ($FileName -and ($Format -eq "All" -or $Format -eq "CSV")) {
+                        Write-EventToFile -FileName $FileName -EventObject $eventObject
+                    } else {
+                        # Collect in memory for other formats
+                        $collectedEvents += $eventObject
+                    }
                     
                     # Update statistics
                     Update-EventStatistics -EventType "HardwareEvents" -Level $event.LevelDisplayName
@@ -717,13 +785,17 @@ function Get-HardwareEvents {
             }
         }
         
-        Write-Log "Streamed $eventCount hardware-related events to file" "SUCCESS"
+        Write-Log "Collected $eventCount hardware-related events" "SUCCESS"
         
     } catch {
         Write-Log "Error collecting hardware events: $($_.Exception.Message)" "ERROR"
     }
     
-    return $eventCount
+    if ($FileName) {
+        return $eventCount
+    } else {
+        return $collectedEvents
+    }
 }
 
 function Get-ReliabilityEvents {
@@ -1258,20 +1330,20 @@ function Start-EventLogCollection {
         Export-EventsToCSV -Events $minidumpAnalysis -FileName "Minidump_Analysis"
         Write-Progress -Activity "Event Collection" -Status "Minidump analysis completed" -PercentComplete 90
     } else {
-        # For non-CSV formats, collect without streaming to files first
-        Get-CriticalSystemEvents
+        # For non-CSV formats, collect events in memory first
+        $systemEvents = Get-CriticalSystemEvents
         Write-Progress -Activity "Event Collection" -Status "System events collected" -PercentComplete 15
         
-        Get-CriticalApplicationEvents
+        $applicationEvents = Get-CriticalApplicationEvents
         Write-Progress -Activity "Event Collection" -Status "Application events collected" -PercentComplete 30
         
-        Get-KernelPowerEvents
+        $kernelPowerEvents = Get-KernelPowerEvents
         Write-Progress -Activity "Event Collection" -Status "Kernel-Power events collected" -PercentComplete 45
         
-        Get-BugCheckEvents
+        $bugCheckEvents = Get-BugCheckEvents
         Write-Progress -Activity "Event Collection" -Status "BugCheck events collected" -PercentComplete 60
         
-        Get-HardwareEvents
+        $hardwareEvents = Get-HardwareEvents
         Write-Progress -Activity "Event Collection" -Status "Hardware events collected" -PercentComplete 70
         
         $reliabilityEvents = Get-ReliabilityEvents
@@ -1279,6 +1351,27 @@ function Start-EventLogCollection {
         
         $minidumpAnalysis = Get-MinidumpAnalysis
         Write-Progress -Activity "Event Collection" -Status "Minidump analysis completed" -PercentComplete 90
+        
+        # Export to selected formats
+        if ($Format -eq "All" -or $Format -eq "HTML") {
+            Export-EventsToHTML -Events $systemEvents -FileName "System_Critical_Errors" -Title "System Critical and Error Events"
+            Export-EventsToHTML -Events $applicationEvents -FileName "Application_Errors" -Title "Application Critical and Error Events"
+            Export-EventsToHTML -Events $kernelPowerEvents -FileName "Kernel_Power_Events" -Title "Kernel-Power Events (Event ID 41)"
+            Export-EventsToHTML -Events $bugCheckEvents -FileName "BugCheck_Events" -Title "BugCheck Events (Event ID 1001)"
+            Export-EventsToHTML -Events $hardwareEvents -FileName "Hardware_Events" -Title "Hardware Error Events"
+            Export-EventsToHTML -Events $reliabilityEvents -FileName "Reliability_Events" -Title "Windows Reliability Events"
+            Export-EventsToHTML -Events $minidumpAnalysis -FileName "Minidump_Analysis" -Title "Crash Dump Analysis"
+        }
+        
+        if ($Format -eq "All" -or $Format -eq "Text") {
+            Export-EventsToText -Events $systemEvents -FileName "System_Critical_Errors" -Title "System Critical and Error Events"
+            Export-EventsToText -Events $applicationEvents -FileName "Application_Errors" -Title "Application Critical and Error Events"
+            Export-EventsToText -Events $kernelPowerEvents -FileName "Kernel_Power_Events" -Title "Kernel-Power Events (Event ID 41)"
+            Export-EventsToText -Events $bugCheckEvents -FileName "BugCheck_Events" -Title "BugCheck Events (Event ID 1001)"
+            Export-EventsToText -Events $hardwareEvents -FileName "Hardware_Events" -Title "Hardware Error Events"
+            Export-EventsToText -Events $reliabilityEvents -FileName "Reliability_Events" -Title "Windows Reliability Events"
+            Export-EventsToText -Events $minidumpAnalysis -FileName "Minidump_Analysis" -Title "Crash Dump Analysis"
+        }
     }
     
     Write-Progress -Activity "Event Collection" -Status "Generating reports" -PercentComplete 95
