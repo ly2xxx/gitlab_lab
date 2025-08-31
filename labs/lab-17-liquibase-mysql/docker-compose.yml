@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # MySQL Database Server
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-server
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: liquibase_demo
+      MYSQL_USER: liquibase
+      MYSQL_PASSWORD: liquibase_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 10
+      interval: 10s
+      start_period: 30s
+    networks:
+      - liquibase-network
+
+  # Liquibase Community Edition
+  liquibase:
+    image: liquibase/liquibase:4.29.2
+    container_name: liquibase-runner
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./changelog:/liquibase/changelog
+      - ./liquibase.properties:/liquibase/liquibase.properties
+      - ./scripts:/liquibase/scripts
+    environment:
+      LIQUIBASE_COMMAND_URL: jdbc:mysql://mysql:3306/liquibase_demo
+      LIQUIBASE_COMMAND_USERNAME: liquibase
+      LIQUIBASE_COMMAND_PASSWORD: liquibase_password
+      LIQUIBASE_COMMAND_CHANGELOG_FILE: /liquibase/changelog/db-changelog-master.xml
+    command: ["--defaults-file=/liquibase/liquibase.properties", "update"]
+    networks:
+      - liquibase-network
+
+  # Liquibase Web UI (for development/testing)
+  liquibase-ui:
+    image: liquibase/liquibase:4.29.2
+    container_name: liquibase-ui
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./changelog:/liquibase/changelog
+      - ./liquibase.properties:/liquibase/liquibase.properties
+    environment:
+      LIQUIBASE_COMMAND_URL: jdbc:mysql://mysql:3306/liquibase_demo
+      LIQUIBASE_COMMAND_USERNAME: liquibase
+      LIQUIBASE_COMMAND_PASSWORD: liquibase_password
+      LIQUIBASE_COMMAND_CHANGELOG_FILE: /liquibase/changelog/db-changelog-master.xml
+    command: ["--defaults-file=/liquibase/liquibase.properties", "history"]
+    networks:
+      - liquibase-network
+
+networks:
+  liquibase-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local

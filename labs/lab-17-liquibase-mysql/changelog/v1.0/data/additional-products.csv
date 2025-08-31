@@ -1,0 +1,6 @@
+id,name,description,sku,price,cost,quantity_available,category,is_active
+,External Monitor 24,High-resolution 24-inch monitor for productivity,CSV-MON-24-001,299.99,199.99,30,Electronics,true
+,Mechanical Keyboard,Premium mechanical keyboard with RGB lighting,CSV-KBD-MECH-001,149.99,89.99,80,Electronics,true
+,USB-C Hub,Multi-port USB-C hub with HDMI and USB 3.0,CSV-HUB-USBC-001,59.99,29.99,120,Electronics,true
+,Desk Lamp LED,Adjustable LED desk lamp with touch controls,CSV-LMP-LED-001,39.99,19.99,60,Office,true
+,Notebook Set,Premium notebook set with hardcover binding,CSV-NTB-SET-001,24.99,12.99,90,Stationery,true

@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Development Environment Specific Changes -->
+    
+    <changeSet id="dev-1.0.1-create-dev-users" author="liquibase-lab" context="development">
+        <comment>
+            Create additional development users for testing scenarios.
+            These users are only created in development environment.
+        </comment>
+        
+        <insert tableName="users">
+            <column name="username" value="developer1"/>
+            <column name="email" value="dev1@liquibase-lab.local"/>
+            <column name="password_hash" value="$2a$10$dev_password_hash_1"/>
+            <column name="first_name" value="Developer"/>
+            <column name="last_name" value="One"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="developer2"/>
+            <column name="email" value="dev2@liquibase-lab.local"/>
+            <column name="password_hash" value="$2a$10$dev_password_hash_2"/>
+            <column name="first_name" value="Developer"/>
+            <column name="last_name" value="Two"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="testmanager"/>
+            <column name="email" value="testmgr@liquibase-lab.local"/>
+            <column name="password_hash" value="$2a$10$test_manager_password_hash"/>
+            <column name="first_name" value="Test"/>
+            <column name="last_name" value="Manager"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="users">
+                <where>username IN ('developer1', 'developer2', 'testmanager')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="dev-1.0.2-assign-dev-roles" author="liquibase-lab" context="development">
+        <comment>
+            Assign roles to development users.
+        </comment>
+        
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'developer1')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'USER')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'developer2')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'USER')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'testmanager')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'MANAGER')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="user_roles">
+                <where>user_id IN (
+                    SELECT id FROM users 
+                    WHERE username IN ('developer1', 'developer2', 'testmanager')
+                )</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="dev-1.0.3-create-sample-orders" author="liquibase-lab" context="development">
+        <comment>
+            Create extensive sample orders for development testing.
+        </comment>
+        
+        <!-- Large order for testing -->
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'developer1')"/>
+            <column name="order_number" value="DEV-ORD-001"/>
+            <column name="status" value="PENDING"/>
+            <column name="total_amount" value="2599.95"/>
+            <column name="tax_amount" value="260.00"/>
+            <column name="shipping_amount" value="25.99"/>
+            <column name="order_date" value="2024-08-30 15:30:00"/>
+        </insert>
+        
+        <!-- Cancelled order for testing -->
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'developer2')"/>
+            <column name="order_number" value="DEV-ORD-002"/>
+            <column name="status" value="CANCELLED"/>
+            <column name="total_amount" value="199.99"/>
+            <column name="tax_amount" value="20.00"/>
+            <column name="shipping_amount" value="9.99"/>
+            <column name="order_date" value="2024-08-28 10:15:00"/>
+        </insert>
+        
+        <!-- Delivered order for testing -->
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'testmanager')"/>
+            <column name="order_number" value="DEV-ORD-003"/>
+            <column name="status" value="DELIVERED"/>
+            <column name="total_amount" value="899.97"/>
+            <column name="tax_amount" value="90.00"/>
+            <column name="shipping_amount" value="15.99"/>
+            <column name="order_date" value="2024-08-20 14:45:00"/>
+            <column name="shipped_date" value="2024-08-21 09:30:00"/>
+            <column name="delivered_date" value="2024-08-24 16:20:00"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="orders">
+                <where>order_number LIKE 'DEV-ORD-%'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="dev-1.0.4-enable-debug-logging" author="liquibase-lab" context="development">
+        <comment>
+            Enable enhanced logging and debugging features for development.
+            Creates tables and triggers for detailed operation tracking.
+        </comment>
+        
+        <createTable tableName="debug_log">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="operation_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="table_name" type="VARCHAR(50)"/>
+            <column name="operation_details" type="TEXT"/>
+            <column name="execution_time_ms" type="INT"/>
+            <column name="user_context" type="VARCHAR(100)"/>
+            <column name="session_id" type="VARCHAR(128)"/>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <createIndex tableName="debug_log" indexName="idx_debug_log_operation_type">
+            <column name="operation_type"/>
+        </createIndex>
+        
+        <createIndex tableName="debug_log" indexName="idx_debug_log_created_at">
+            <column name="created_at"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="debug_log" indexName="idx_debug_log_operation_type"/>
+            <dropIndex tableName="debug_log" indexName="idx_debug_log_created_at"/>
+            <dropTable tableName="debug_log"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="dev-1.0.5-create-test-data-generator" author="liquibase-lab" context="development" runOnChange="true">
+        <comment>
+            Create stored procedures to generate test data for development.
+        </comment>
+        
+        <sql splitStatements="true" stripComments="false">
+            DROP PROCEDURE IF EXISTS GenerateTestProducts;
+            DROP PROCEDURE IF EXISTS GenerateTestOrders;
+            
+            -- Procedure to generate test products
+            DELIMITER //
+            CREATE PROCEDURE GenerateTestProducts(IN p_count INT)
+            BEGIN
+                DECLARE v_counter INT DEFAULT 1;
+                DECLARE v_category_id BIGINT;
+                DECLARE v_admin_id BIGINT;
+                
+                SELECT id INTO v_admin_id FROM users WHERE username = 'admin' LIMIT 1;
+                
+                WHILE v_counter &lt;= p_count DO
+                    -- Get random category
+                    SELECT id INTO v_category_id 
+                    FROM categories 
+                    WHERE is_active = TRUE 
+                    ORDER BY RAND() 
+                    LIMIT 1;
+                    
+                    INSERT INTO products (
+                        name, 
+                        description, 
+                        sku, 
+                        price, 
+                        cost, 
+                        quantity_available, 
+                        category_id,
+                        is_active,
+                        created_by,
+                        updated_by
+                    ) VALUES (
+                        CONCAT('Test Product ', v_counter),
+                        CONCAT('Auto-generated test product #', v_counter, ' for development testing'),
+                        CONCAT('TEST-', LPAD(v_counter, 6, '0')),
+                        ROUND(RAND() * 1000 + 10, 2),
+                        ROUND(RAND() * 500 + 5, 2),
+                        FLOOR(RAND() * 100) + 1,
+                        v_category_id,
+                        TRUE,
+                        v_admin_id,
+                        v_admin_id
+                    );
+                    
+                    SET v_counter = v_counter + 1;
+                END WHILE;
+                
+                SELECT CONCAT('Generated ', p_count, ' test products') as result;
+            END//
+            DELIMITER ;
+            
+            -- Procedure to generate test orders
+            DELIMITER //
+            CREATE PROCEDURE GenerateTestOrders(IN p_count INT)
+            BEGIN
+                DECLARE v_counter INT DEFAULT 1;
+                DECLARE v_user_id BIGINT;
+                DECLARE v_status VARCHAR(20);
+                DECLARE v_order_date DATETIME;
+                
+                WHILE v_counter &lt;= p_count DO
+                    -- Get random user
+                    SELECT id INTO v_user_id 
+                    FROM users 
+                    WHERE is_active = TRUE 
+                    ORDER BY RAND() 
+                    LIMIT 1;
+                    
+                    -- Random status
+                    SET v_status = ELT(FLOOR(RAND() * 5) + 1, 'PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED');
+                    
+                    -- Random date within last 90 days
+                    SET v_order_date = DATE_SUB(NOW(), INTERVAL FLOOR(RAND() * 90) DAY);
+                    
+                    INSERT INTO orders (
+                        user_id,
+                        order_number,
+                        status,
+                        total_amount,
+                        tax_amount,
+                        shipping_amount,
+                        order_date,
+                        created_by,
+                        updated_by
+                    ) VALUES (
+                        v_user_id,
+                        CONCAT('TEST-', LPAD(v_counter, 6, '0')),
+                        v_status,
+                        ROUND(RAND() * 500 + 20, 2),
+                        ROUND((RAND() * 500 + 20) * 0.1, 2),
+                        ROUND(RAND() * 20 + 5, 2),
+                        v_order_date,
+                        v_user_id,
+                        v_user_id
+                    );
+                    
+                    SET v_counter = v_counter + 1;
+                END WHILE;
+                
+                SELECT CONCAT('Generated ', p_count, ' test orders') as result;
+            END//
+            DELIMITER ;
+        </sql>
+        
+        <rollback>
+            <sql>
+                DROP PROCEDURE IF EXISTS GenerateTestProducts;
+                DROP PROCEDURE IF EXISTS GenerateTestOrders;
+            </sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="dev-1.0.6-create-development-views" author="liquibase-lab" context="development" runOnChange="true">
+        <comment>
+            Create development-specific views for debugging and testing.
+        </comment>
+        
+        <createView viewName="dev_user_summary" replaceIfExists="true">
+            <![CDATA[
+            SELECT 
+                u.id,
+                u.username,
+                u.email,
+                GROUP_CONCAT(r.name ORDER BY r.name) as roles,
+                COUNT(DISTINCT o.id) as order_count,
+                COALESCE(SUM(o.total_amount), 0) as total_spent,
+                u.created_at as joined_date
+            FROM users u
+            LEFT JOIN user_roles ur ON u.id = ur.user_id
+            LEFT JOIN roles r ON ur.role_id = r.id
+            LEFT JOIN orders o ON u.id = o.user_id AND o.deleted_at IS NULL
+            WHERE u.deleted_at IS NULL
+            GROUP BY u.id, u.username, u.email, u.created_at
+            ORDER BY u.username
+            ]]>
+        </createView>
+        
+        <createView viewName="dev_recent_activity" replaceIfExists="true">
+            <![CDATA[
+            SELECT 
+                'ORDER' as activity_type,
+                o.id as record_id,
+                CONCAT('Order ', o.order_number, ' - Status: ', o.status) as description,
+                u.username as user_name,
+                o.created_at as activity_date
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            WHERE o.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            
+            UNION ALL
+            
+            SELECT 
+                'USER' as activity_type,
+                u.id as record_id,
+                CONCAT('User registered: ', u.username) as description,
+                u.username as user_name,
+                u.created_at as activity_date
+            FROM users u
+            WHERE u.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            
+            UNION ALL
+            
+            SELECT 
+                'PRODUCT' as activity_type,
+                p.id as record_id,
+                CONCAT('Product added: ', p.name) as description,
+                'system' as user_name,
+                p.created_at as activity_date
+            FROM products p
+            WHERE p.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            
+            ORDER BY activity_date DESC
+            LIMIT 50
+            ]]>
+        </createView>
+        
+        <rollback>
+            <dropView viewName="dev_user_summary"/>
+            <dropView viewName="dev_recent_activity"/>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

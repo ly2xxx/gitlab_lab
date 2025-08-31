@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Initial Schema Creation - Version 1.0 -->
+    
+    <changeSet id="1.0.1-create-users-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="users"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create users table to store application user information.
+            This includes basic user data and authentication details.
+        </comment>
+        <createTable tableName="users">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="username" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="email" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="password_hash" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="first_name" type="VARCHAR(50)"/>
+            <column name="last_name" type="VARCHAR(50)"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="users"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.2-create-products-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="products"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create products table to demonstrate a typical e-commerce scenario.
+            Includes pricing, inventory, and basic product information.
+        </comment>
+        <createTable tableName="products">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="sku" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="price" type="DECIMAL(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cost" type="DECIMAL(10,2)"/>
+            <column name="quantity_available" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category" type="VARCHAR(100)"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="products"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.3-create-orders-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="orders"/>
+            </not>
+            <tableExists tableName="users"/>
+        </preConditions>
+        <comment>
+            Create orders table with foreign key relationship to users.
+            Demonstrates table relationships and constraints.
+        </comment>
+        <createTable tableName="orders">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="order_number" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="status" type="ENUM('PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED')" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_amount" type="DECIMAL(12,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tax_amount" type="DECIMAL(10,2)" defaultValueNumeric="0.00"/>
+            <column name="shipping_amount" type="DECIMAL(8,2)" defaultValueNumeric="0.00"/>
+            <column name="order_date" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="shipped_date" type="DATETIME"/>
+            <column name="delivered_date" type="DATETIME"/>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint 
+            baseTableName="orders" 
+            baseColumnNames="user_id" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_orders_user_id"
+            onDelete="CASCADE"
+            onUpdate="CASCADE"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="orders" constraintName="fk_orders_user_id"/>
+            <dropTable tableName="orders"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.4-create-order-items-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="order_items"/>
+            </not>
+            <tableExists tableName="orders"/>
+            <tableExists tableName="products"/>
+        </preConditions>
+        <comment>
+            Create order_items junction table to demonstrate many-to-many relationships.
+            Shows how to handle line items in an e-commerce system.
+        </comment>
+        <createTable tableName="order_items">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="order_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quantity" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="unit_price" type="DECIMAL(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_price" type="DECIMAL(12,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint 
+            baseTableName="order_items" 
+            baseColumnNames="order_id" 
+            referencedTableName="orders" 
+            referencedColumnNames="id" 
+            constraintName="fk_order_items_order_id"
+            onDelete="CASCADE"
+            onUpdate="CASCADE"/>
+            
+        <addForeignKeyConstraint 
+            baseTableName="order_items" 
+            baseColumnNames="product_id" 
+            referencedTableName="products" 
+            referencedColumnNames="id" 
+            constraintName="fk_order_items_product_id"
+            onDelete="CASCADE"
+            onUpdate="CASCADE"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="order_items" constraintName="fk_order_items_order_id"/>
+            <dropForeignKeyConstraint baseTableName="order_items" constraintName="fk_order_items_product_id"/>
+            <dropTable tableName="order_items"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.5-create-basic-indexes" author="liquibase-lab" dbms="mysql">
+        <comment>
+            Create basic indexes for better query performance.
+            Demonstrates index creation and naming conventions.
+        </comment>
+        
+        <createIndex tableName="users" indexName="idx_users_email">
+            <column name="email"/>
+        </createIndex>
+        
+        <createIndex tableName="users" indexName="idx_users_username">
+            <column name="username"/>
+        </createIndex>
+        
+        <createIndex tableName="products" indexName="idx_products_sku">
+            <column name="sku"/>
+        </createIndex>
+        
+        <createIndex tableName="products" indexName="idx_products_category">
+            <column name="category"/>
+        </createIndex>
+        
+        <createIndex tableName="orders" indexName="idx_orders_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        
+        <createIndex tableName="orders" indexName="idx_orders_status">
+            <column name="status"/>
+        </createIndex>
+        
+        <createIndex tableName="orders" indexName="idx_orders_order_date">
+            <column name="order_date"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="users" indexName="idx_users_email"/>
+            <dropIndex tableName="users" indexName="idx_users_username"/>
+            <dropIndex tableName="products" indexName="idx_products_sku"/>
+            <dropIndex tableName="products" indexName="idx_products_category"/>
+            <dropIndex tableName="orders" indexName="idx_orders_user_id"/>
+            <dropIndex tableName="orders" indexName="idx_orders_status"/>
+            <dropIndex tableName="orders" indexName="idx_orders_order_date"/>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

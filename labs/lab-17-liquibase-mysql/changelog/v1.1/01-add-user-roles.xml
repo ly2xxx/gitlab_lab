@@ -1,0 +1,403 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- User Roles and Permissions - Version 1.1 -->
+    
+    <changeSet id="1.1.1-create-roles-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="roles"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create roles table to implement role-based access control.
+            This demonstrates schema evolution and new feature addition.
+        </comment>
+        <createTable tableName="roles">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="roles"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.2-create-user-roles-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="user_roles"/>
+            </not>
+            <tableExists tableName="users"/>
+            <tableExists tableName="roles"/>
+        </preConditions>
+        <comment>
+            Create user_roles junction table for many-to-many relationship.
+            Allows users to have multiple roles and roles to be assigned to multiple users.
+        </comment>
+        <createTable tableName="user_roles">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="assigned_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="assigned_by" type="BIGINT"/>
+        </createTable>
+        
+        <addForeignKeyConstraint 
+            baseTableName="user_roles" 
+            baseColumnNames="user_id" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_user_roles_user_id"
+            onDelete="CASCADE"
+            onUpdate="CASCADE"/>
+            
+        <addForeignKeyConstraint 
+            baseTableName="user_roles" 
+            baseColumnNames="role_id" 
+            referencedTableName="roles" 
+            referencedColumnNames="id" 
+            constraintName="fk_user_roles_role_id"
+            onDelete="CASCADE"
+            onUpdate="CASCADE"/>
+            
+        <addForeignKeyConstraint 
+            baseTableName="user_roles" 
+            baseColumnNames="assigned_by" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_user_roles_assigned_by"
+            onDelete="SET NULL"
+            onUpdate="CASCADE"/>
+        
+        <!-- Add unique constraint to prevent duplicate role assignments -->
+        <addUniqueConstraint 
+            tableName="user_roles" 
+            columnNames="user_id,role_id" 
+            constraintName="uk_user_roles_user_role"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="user_roles" constraintName="fk_user_roles_user_id"/>
+            <dropForeignKeyConstraint baseTableName="user_roles" constraintName="fk_user_roles_role_id"/>
+            <dropForeignKeyConstraint baseTableName="user_roles" constraintName="fk_user_roles_assigned_by"/>
+            <dropUniqueConstraint tableName="user_roles" constraintName="uk_user_roles_user_role"/>
+            <dropTable tableName="user_roles"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.3-create-permissions-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="permissions"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create permissions table to define granular access permissions.
+            This enables fine-grained authorization control.
+        </comment>
+        <createTable tableName="permissions">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="resource" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action" type="ENUM('CREATE', 'READ', 'UPDATE', 'DELETE', 'EXECUTE')">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <createIndex tableName="permissions" indexName="idx_permissions_resource_action">
+            <column name="resource"/>
+            <column name="action"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="permissions" indexName="idx_permissions_resource_action"/>
+            <dropTable tableName="permissions"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.4-create-role-permissions-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="role_permissions"/>
+            </not>
+            <tableExists tableName="roles"/>
+            <tableExists tableName="permissions"/>
+        </preConditions>
+        <comment>
+            Create role_permissions junction table.
+            Links roles to permissions for complete RBAC implementation.
+        </comment>
+        <createTable tableName="role_permissions">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="role_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="permission_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="granted_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint 
+            baseTableName="role_permissions" 
+            baseColumnNames="role_id" 
+            referencedTableName="roles" 
+            referencedColumnNames="id" 
+            constraintName="fk_role_permissions_role_id"
+            onDelete="CASCADE"
+            onUpdate="CASCADE"/>
+            
+        <addForeignKeyConstraint 
+            baseTableName="role_permissions" 
+            baseColumnNames="permission_id" 
+            referencedTableName="permissions" 
+            referencedColumnNames="id" 
+            constraintName="fk_role_permissions_permission_id"
+            onDelete="CASCADE"
+            onUpdate="CASCADE"/>
+        
+        <addUniqueConstraint 
+            tableName="role_permissions" 
+            columnNames="role_id,permission_id" 
+            constraintName="uk_role_permissions_role_permission"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="role_permissions" constraintName="fk_role_permissions_role_id"/>
+            <dropForeignKeyConstraint baseTableName="role_permissions" constraintName="fk_role_permissions_permission_id"/>
+            <dropUniqueConstraint tableName="role_permissions" constraintName="uk_role_permissions_role_permission"/>
+            <dropTable tableName="role_permissions"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.5-seed-roles-data" author="liquibase-lab" context="development,test">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="roles"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM roles</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert default roles for the application.
+            Creates a standard set of roles for different user types.
+        </comment>
+        
+        <insert tableName="roles">
+            <column name="name" value="ADMIN"/>
+            <column name="description" value="System administrator with full access to all resources"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="roles">
+            <column name="name" value="USER"/>
+            <column name="description" value="Standard user with limited access to personal resources"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="roles">
+            <column name="name" value="MANAGER"/>
+            <column name="description" value="Manager role with access to team resources and reports"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="roles">
+            <column name="name" value="CUSTOMER"/>
+            <column name="description" value="Customer role for external users with limited access"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="roles">
+                <where>name IN ('ADMIN', 'USER', 'MANAGER', 'CUSTOMER')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.6-seed-permissions-data" author="liquibase-lab" context="development,test">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="permissions"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM permissions</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert standard permissions for the application.
+            Defines granular permissions for different resources and actions.
+        </comment>
+        
+        <!-- User management permissions -->
+        <insert tableName="permissions">
+            <column name="name" value="users.create"/>
+            <column name="resource" value="users"/>
+            <column name="action" value="CREATE"/>
+            <column name="description" value="Permission to create new user accounts"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="users.read"/>
+            <column name="resource" value="users"/>
+            <column name="action" value="READ"/>
+            <column name="description" value="Permission to view user information"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="users.update"/>
+            <column name="resource" value="users"/>
+            <column name="action" value="UPDATE"/>
+            <column name="description" value="Permission to modify user accounts"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="users.delete"/>
+            <column name="resource" value="users"/>
+            <column name="action" value="DELETE"/>
+            <column name="description" value="Permission to delete user accounts"/>
+        </insert>
+        
+        <!-- Product management permissions -->
+        <insert tableName="permissions">
+            <column name="name" value="products.create"/>
+            <column name="resource" value="products"/>
+            <column name="action" value="CREATE"/>
+            <column name="description" value="Permission to create new products"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="products.read"/>
+            <column name="resource" value="products"/>
+            <column name="action" value="READ"/>
+            <column name="description" value="Permission to view product information"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="products.update"/>
+            <column name="resource" value="products"/>
+            <column name="action" value="UPDATE"/>
+            <column name="description" value="Permission to modify product information"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="products.delete"/>
+            <column name="resource" value="products"/>
+            <column name="action" value="DELETE"/>
+            <column name="description" value="Permission to delete products"/>
+        </insert>
+        
+        <!-- Order management permissions -->
+        <insert tableName="permissions">
+            <column name="name" value="orders.create"/>
+            <column name="resource" value="orders"/>
+            <column name="action" value="CREATE"/>
+            <column name="description" value="Permission to create new orders"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="orders.read"/>
+            <column name="resource" value="orders"/>
+            <column name="action" value="READ"/>
+            <column name="description" value="Permission to view order information"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="orders.update"/>
+            <column name="resource" value="orders"/>
+            <column name="action" value="UPDATE"/>
+            <column name="description" value="Permission to modify order status and details"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="orders.delete"/>
+            <column name="resource" value="orders"/>
+            <column name="action" value="DELETE"/>
+            <column name="description" value="Permission to cancel or delete orders"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="permissions">
+                <where>resource IN ('users', 'products', 'orders')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.7-assign-user-roles" author="liquibase-lab" context="development,test">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="user_roles"/>
+            <tableExists tableName="users"/>
+            <tableExists tableName="roles"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM user_roles</sqlCheck>
+        </preConditions>
+        <comment>
+            Assign roles to existing users.
+            Demonstrates role assignment and user authorization setup.
+        </comment>
+        
+        <!-- Assign ADMIN role to admin user -->
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'ADMIN')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <!-- Assign USER role to regular users -->
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'johndoe')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'USER')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'janedoe')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'MANAGER')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'testuser')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'CUSTOMER')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="user_roles"/>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

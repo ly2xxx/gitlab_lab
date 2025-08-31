@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Add Audit Fields - Version 1.1 -->
+    
+    <changeSet id="1.1.8-add-audit-fields-products" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="products"/>
+            <not>
+                <columnExists tableName="products" columnName="created_by"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add audit fields to products table to track who created and modified records.
+            Demonstrates adding columns to existing tables.
+        </comment>
+        
+        <addColumn tableName="products">
+            <column name="created_by" type="BIGINT" afterColumn="is_active">
+                <constraints foreignKeyName="fk_products_created_by" references="users(id)"/>
+            </column>
+            <column name="updated_by" type="BIGINT" afterColumn="created_by">
+                <constraints foreignKeyName="fk_products_updated_by" references="users(id)"/>
+            </column>
+            <column name="version" type="INT" defaultValueNumeric="1" afterColumn="updated_by">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        
+        <!-- Update existing records with default audit values -->
+        <sql>
+            UPDATE products 
+            SET created_by = (SELECT id FROM users WHERE username = 'admin' LIMIT 1),
+                updated_by = (SELECT id FROM users WHERE username = 'admin' LIMIT 1),
+                version = 1
+            WHERE created_by IS NULL;
+        </sql>
+        
+        <rollback>
+            <dropColumn tableName="products">
+                <column name="created_by"/>
+                <column name="updated_by"/>
+                <column name="version"/>
+            </dropColumn>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.9-add-audit-fields-orders" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="orders"/>
+            <not>
+                <columnExists tableName="orders" columnName="created_by"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add audit fields to orders table.
+            Shows consistent auditing pattern across all important tables.
+        </comment>
+        
+        <addColumn tableName="orders">
+            <column name="created_by" type="BIGINT" afterColumn="updated_at">
+                <constraints foreignKeyName="fk_orders_created_by" references="users(id)"/>
+            </column>
+            <column name="updated_by" type="BIGINT" afterColumn="created_by">
+                <constraints foreignKeyName="fk_orders_updated_by" references="users(id)"/>
+            </column>
+            <column name="version" type="INT" defaultValueNumeric="1" afterColumn="updated_by">
+                <constraints nullable="false"/>
+            </column>
+            <column name="notes" type="TEXT" afterColumn="version"/>
+        </addColumn>
+        
+        <!-- Update existing records -->
+        <sql>
+            UPDATE orders o
+            SET created_by = o.user_id,
+                updated_by = o.user_id,
+                version = 1
+            WHERE created_by IS NULL;
+        </sql>
+        
+        <rollback>
+            <dropColumn tableName="orders">
+                <column name="created_by"/>
+                <column name="updated_by"/>
+                <column name="version"/>
+                <column name="notes"/>
+            </dropColumn>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.10-create-audit-log-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="audit_log"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create audit log table to track all changes to important entities.
+            Demonstrates creation of audit trail functionality.
+        </comment>
+        
+        <createTable tableName="audit_log">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="table_name" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="record_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action" type="ENUM('INSERT', 'UPDATE', 'DELETE')">
+                <constraints nullable="false"/>
+            </column>
+            <column name="old_values" type="JSON"/>
+            <column name="new_values" type="JSON"/>
+            <column name="changed_by" type="BIGINT">
+                <constraints foreignKeyName="fk_audit_log_changed_by" references="users(id)"/>
+            </column>
+            <column name="change_reason" type="VARCHAR(255)"/>
+            <column name="ip_address" type="VARCHAR(45)"/>
+            <column name="user_agent" type="TEXT"/>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <createIndex tableName="audit_log" indexName="idx_audit_log_table_record">
+            <column name="table_name"/>
+            <column name="record_id"/>
+        </createIndex>
+        
+        <createIndex tableName="audit_log" indexName="idx_audit_log_action">
+            <column name="action"/>
+        </createIndex>
+        
+        <createIndex tableName="audit_log" indexName="idx_audit_log_changed_by">
+            <column name="changed_by"/>
+        </createIndex>
+        
+        <createIndex tableName="audit_log" indexName="idx_audit_log_created_at">
+            <column name="created_at"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_table_record"/>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_action"/>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_changed_by"/>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_created_at"/>
+            <dropTable tableName="audit_log"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.11-create-user-sessions-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="user_sessions"/>
+            </not>
+            <tableExists tableName="users"/>
+        </preConditions>
+        <comment>
+            Create user sessions table to track user login sessions.
+            Shows session management and security tracking capabilities.
+        </comment>
+        
+        <createTable tableName="user_sessions">
+            <column name="id" type="VARCHAR(128)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_user_sessions_user_id" references="users(id)"/>
+            </column>
+            <column name="ip_address" type="VARCHAR(45)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_agent" type="TEXT"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="login_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_activity_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="logout_at" type="DATETIME"/>
+            <column name="expires_at" type="DATETIME">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <createIndex tableName="user_sessions" indexName="idx_user_sessions_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        
+        <createIndex tableName="user_sessions" indexName="idx_user_sessions_is_active">
+            <column name="is_active"/>
+        </createIndex>
+        
+        <createIndex tableName="user_sessions" indexName="idx_user_sessions_expires_at">
+            <column name="expires_at"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="user_sessions" indexName="idx_user_sessions_user_id"/>
+            <dropIndex tableName="user_sessions" indexName="idx_user_sessions_is_active"/>
+            <dropIndex tableName="user_sessions" indexName="idx_user_sessions_expires_at"/>
+            <dropTable tableName="user_sessions"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.12-add-soft-delete-support" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="products"/>
+            <tableExists tableName="orders"/>
+            <not>
+                <columnExists tableName="products" columnName="deleted_at"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add soft delete support to main tables.
+            Demonstrates adding deleted_at timestamps for soft delete pattern.
+        </comment>
+        
+        <addColumn tableName="products">
+            <column name="deleted_at" type="DATETIME" afterColumn="version"/>
+            <column name="deleted_by" type="BIGINT" afterColumn="deleted_at">
+                <constraints foreignKeyName="fk_products_deleted_by" references="users(id)"/>
+            </column>
+        </addColumn>
+        
+        <addColumn tableName="orders">
+            <column name="deleted_at" type="DATETIME" afterColumn="notes"/>
+            <column name="deleted_by" type="BIGINT" afterColumn="deleted_at">
+                <constraints foreignKeyName="fk_orders_deleted_by" references="users(id)"/>
+            </column>
+        </addColumn>
+        
+        <addColumn tableName="users">
+            <column name="deleted_at" type="DATETIME" afterColumn="updated_at"/>
+            <column name="deleted_by" type="BIGINT" afterColumn="deleted_at">
+                <constraints foreignKeyName="fk_users_deleted_by" references="users(id)"/>
+            </column>
+        </addColumn>
+        
+        <!-- Create indexes for soft delete queries -->
+        <createIndex tableName="products" indexName="idx_products_deleted_at">
+            <column name="deleted_at"/>
+        </createIndex>
+        
+        <createIndex tableName="orders" indexName="idx_orders_deleted_at">
+            <column name="deleted_at"/>
+        </createIndex>
+        
+        <createIndex tableName="users" indexName="idx_users_deleted_at">
+            <column name="deleted_at"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="products" indexName="idx_products_deleted_at"/>
+            <dropIndex tableName="orders" indexName="idx_orders_deleted_at"/>
+            <dropIndex tableName="users" indexName="idx_users_deleted_at"/>
+            <dropColumn tableName="products">
+                <column name="deleted_at"/>
+                <column name="deleted_by"/>
+            </dropColumn>
+            <dropColumn tableName="orders">
+                <column name="deleted_at"/>
+                <column name="deleted_by"/>
+            </dropColumn>
+            <dropColumn tableName="users">
+                <column name="deleted_at"/>
+                <column name="deleted_by"/>
+            </dropColumn>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.13-create-audit-triggers" author="liquibase-lab" dbms="mysql" runOnChange="true">
+        <comment>
+            Create database triggers for automatic audit logging.
+            Demonstrates advanced database features and automatic change tracking.
+            Note: This changeset uses runOnChange to update triggers when modified.
+        </comment>
+        
+        <sql splitStatements="true" stripComments="false">
+            -- Drop existing triggers if they exist
+            DROP TRIGGER IF EXISTS products_audit_insert;
+            DROP TRIGGER IF EXISTS products_audit_update;
+            DROP TRIGGER IF EXISTS products_audit_delete;
+            
+            -- Create audit trigger for products INSERT
+            DELIMITER //
+            CREATE TRIGGER products_audit_insert
+                AFTER INSERT ON products
+                FOR EACH ROW
+            BEGIN
+                INSERT INTO audit_log (table_name, record_id, action, new_values, changed_by, created_at)
+                VALUES ('products', NEW.id, 'INSERT', 
+                       JSON_OBJECT('name', NEW.name, 'sku', NEW.sku, 'price', NEW.price),
+                       NEW.created_by, NOW());
+            END//
+            DELIMITER ;
+            
+            -- Create audit trigger for products UPDATE
+            DELIMITER //
+            CREATE TRIGGER products_audit_update
+                AFTER UPDATE ON products
+                FOR EACH ROW
+            BEGIN
+                INSERT INTO audit_log (table_name, record_id, action, old_values, new_values, changed_by, created_at)
+                VALUES ('products', NEW.id, 'UPDATE',
+                       JSON_OBJECT('name', OLD.name, 'sku', OLD.sku, 'price', OLD.price),
+                       JSON_OBJECT('name', NEW.name, 'sku', NEW.sku, 'price', NEW.price),
+                       NEW.updated_by, NOW());
+            END//
+            DELIMITER ;
+            
+            -- Create audit trigger for products DELETE (soft delete)
+            DELIMITER //
+            CREATE TRIGGER products_audit_delete
+                AFTER UPDATE ON products
+                FOR EACH ROW
+            BEGIN
+                IF OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
+                    INSERT INTO audit_log (table_name, record_id, action, old_values, changed_by, created_at)
+                    VALUES ('products', NEW.id, 'DELETE',
+                           JSON_OBJECT('name', OLD.name, 'sku', OLD.sku, 'deleted_at', NEW.deleted_at),
+                           NEW.deleted_by, NOW());
+                END IF;
+            END//
+            DELIMITER ;
+        </sql>
+        
+        <rollback>
+            <sql>
+                DROP TRIGGER IF EXISTS products_audit_insert;
+                DROP TRIGGER IF EXISTS products_audit_update;
+                DROP TRIGGER IF EXISTS products_audit_delete;
+            </sql>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

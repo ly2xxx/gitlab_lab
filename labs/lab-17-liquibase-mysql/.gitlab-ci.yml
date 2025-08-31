@@ -1,0 +1,329 @@
+stages:
+  - validate
+  - test
+  - deploy-dev
+  - deploy-test
+  - deploy-prod
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  MYSQL_ROOT_PASSWORD: rootpassword
+  MYSQL_DATABASE: liquibase_demo
+  MYSQL_USER: liquibase
+  MYSQL_PASSWORD: liquibase_password
+
+# Global services for database
+services:
+  - name: mysql:8.0
+    alias: mysql
+    variables:
+      MYSQL_ROOT_PASSWORD: $MYSQL_ROOT_PASSWORD
+      MYSQL_DATABASE: $MYSQL_DATABASE
+      MYSQL_USER: $MYSQL_USER
+      MYSQL_PASSWORD: $MYSQL_PASSWORD
+    command: ["--default-authentication-plugin=mysql_native_password"]
+
+before_script:
+  - echo "Setting up Liquibase environment..."
+  - apk add --no-cache bash curl
+  - |
+    # Wait for MySQL to be ready
+    until mysql -h mysql -u $MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE -e "SELECT 1"; do
+      echo "Waiting for MySQL to be ready..."
+      sleep 5
+    done
+  - echo "MySQL is ready!"
+
+# Job Templates
+.liquibase_job_template: &liquibase_job_definition
+  image: liquibase/liquibase:4.29.2
+  variables:
+    LIQUIBASE_COMMAND_URL: jdbc:mysql://mysql:3306/$MYSQL_DATABASE
+    LIQUIBASE_COMMAND_USERNAME: $MYSQL_USER
+    LIQUIBASE_COMMAND_PASSWORD: $MYSQL_PASSWORD
+  before_script:
+    - echo "Setting up Liquibase environment..."
+    - |
+      # Wait for MySQL to be ready
+      timeout=60
+      while ! nc -z mysql 3306 && [ $timeout -gt 0 ]; do
+        echo "Waiting for MySQL to be ready... ($timeout seconds remaining)"
+        sleep 2
+        timeout=$((timeout-2))
+      done
+      if [ $timeout -le 0 ]; then
+        echo "MySQL did not become ready in time"
+        exit 1
+      fi
+    - echo "MySQL is ready!"
+
+# Validation Stage
+liquibase_validate:
+  <<: *liquibase_job_definition
+  stage: validate
+  script:
+    - echo "Validating Liquibase changelog syntax..."
+    - cd labs/lab-17-liquibase-mysql
+    - liquibase --defaults-file=liquibase.properties validate
+    - echo "Changelog validation passed!"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/lab-17-liquibase-mysql/
+
+# Test Stage
+liquibase_test_status:
+  <<: *liquibase_job_definition
+  stage: test
+  script:
+    - echo "Checking Liquibase status without applying changes..."
+    - cd labs/lab-17-liquibase-mysql
+    - liquibase --defaults-file=liquibase.properties status --verbose
+    - echo "Status check completed successfully!"
+  artifacts:
+    reports:
+      junit: labs/lab-17-liquibase-mysql/reports/liquibase-status.xml
+    paths:
+      - labs/lab-17-liquibase-mysql/reports/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/lab-17-liquibase-mysql/
+
+liquibase_test_update_sql:
+  <<: *liquibase_job_definition
+  stage: test
+  script:
+    - echo "Generating SQL for pending changes..."
+    - cd labs/lab-17-liquibase-mysql
+    - mkdir -p reports
+    - liquibase --defaults-file=liquibase.properties update-sql > reports/update-sql-output.sql
+    - echo "Generated SQL:"
+    - cat reports/update-sql-output.sql
+    - echo "SQL generation completed!"
+  artifacts:
+    paths:
+      - labs/lab-17-liquibase-mysql/reports/update-sql-output.sql
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/lab-17-liquibase-mysql/
+
+# Development Environment Deployment
+deploy_to_development:
+  <<: *liquibase_job_definition
+  stage: deploy-dev
+  environment:
+    name: development
+    url: http://mysql:3306
+  variables:
+    LIQUIBASE_COMMAND_CONTEXTS: development
+  script:
+    - echo "Deploying to Development environment..."
+    - cd labs/lab-17-liquibase-mysql
+    - mkdir -p reports
+    
+    # Run update with development context
+    - liquibase --defaults-file=liquibase.properties update
+    
+    # Generate deployment report
+    - liquibase --defaults-file=liquibase.properties history > reports/dev-deployment-history.txt
+    
+    # Verify deployment
+    - liquibase --defaults-file=liquibase.properties status --verbose
+    
+    - echo "Development deployment completed successfully!"
+  artifacts:
+    paths:
+      - labs/lab-17-liquibase-mysql/reports/dev-deployment-history.txt
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/lab-17-liquibase-mysql/
+      when: manual
+  allow_failure: false
+
+# Test Environment Deployment  
+deploy_to_test:
+  <<: *liquibase_job_definition
+  stage: deploy-test
+  environment:
+    name: test
+    url: http://mysql:3306
+  variables:
+    LIQUIBASE_COMMAND_CONTEXTS: test
+    MYSQL_DATABASE: liquibase_test
+  script:
+    - echo "Deploying to Test environment..."
+    - cd labs/lab-17-liquibase-mysql
+    - mkdir -p reports
+    
+    # Create test database if it doesn't exist
+    - mysql -h mysql -u root -p$MYSQL_ROOT_PASSWORD -e "CREATE DATABASE IF NOT EXISTS liquibase_test;"
+    - mysql -h mysql -u root -p$MYSQL_ROOT_PASSWORD -e "GRANT ALL PRIVILEGES ON liquibase_test.* TO '$MYSQL_USER'@'%';"
+    - mysql -h mysql -u root -p$MYSQL_ROOT_PASSWORD -e "FLUSH PRIVILEGES;"
+    
+    # Update connection URL for test database
+    - export LIQUIBASE_COMMAND_URL=jdbc:mysql://mysql:3306/liquibase_test
+    
+    # Run update with test context
+    - liquibase --defaults-file=liquibase.properties update
+    
+    # Run test validation procedures
+    - mysql -h mysql -u $MYSQL_USER -p$MYSQL_PASSWORD liquibase_test -e "CALL CleanupTestData();"
+    - mysql -h mysql -u $MYSQL_USER -p$MYSQL_PASSWORD liquibase_test -e "CALL ResetTestSequences();"
+    
+    # Generate test deployment report
+    - liquibase --defaults-file=liquibase.properties history > reports/test-deployment-history.txt
+    
+    - echo "Test deployment completed successfully!"
+  artifacts:
+    paths:
+      - labs/lab-17-liquibase-mysql/reports/test-deployment-history.txt
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  dependencies:
+    - deploy_to_development
+  allow_failure: false
+
+# Production-like Environment (Simulated)
+deploy_to_production:
+  <<: *liquibase_job_definition
+  stage: deploy-prod
+  environment:
+    name: production
+    url: http://mysql:3306
+  variables:
+    LIQUIBASE_COMMAND_CONTEXTS: production
+    MYSQL_DATABASE: liquibase_prod
+  script:
+    - echo "Deploying to Production environment (simulated)..."
+    - cd labs/lab-17-liquibase-mysql
+    - mkdir -p reports
+    
+    # Create production database if it doesn't exist
+    - mysql -h mysql -u root -p$MYSQL_ROOT_PASSWORD -e "CREATE DATABASE IF NOT EXISTS liquibase_prod;"
+    - mysql -h mysql -u root -p$MYSQL_ROOT_PASSWORD -e "GRANT ALL PRIVILEGES ON liquibase_prod.* TO '$MYSQL_USER'@'%';"
+    - mysql -h mysql -u root -p$MYSQL_ROOT_PASSWORD -e "FLUSH PRIVILEGES;"
+    
+    # Update connection URL for production database
+    - export LIQUIBASE_COMMAND_URL=jdbc:mysql://mysql:3306/liquibase_prod
+    
+    # Production deployment should be more cautious
+    - echo "Performing pre-deployment validation..."
+    - liquibase --defaults-file=liquibase.properties validate
+    - liquibase --defaults-file=liquibase.properties status --verbose
+    
+    # Generate rollback SQL as safety measure
+    - liquibase --defaults-file=liquibase.properties rollback-count-sql 10 > reports/rollback-safety-plan.sql
+    
+    # Apply changes (excluding development/test specific contexts)
+    - liquibase --defaults-file=liquibase.properties --contexts="!development,!test" update
+    
+    # Generate production deployment report
+    - liquibase --defaults-file=liquibase.properties history > reports/prod-deployment-history.txt
+    
+    # Post-deployment validation
+    - mysql -h mysql -u $MYSQL_USER -p$MYSQL_PASSWORD liquibase_prod -e "SELECT COUNT(*) as table_count FROM information_schema.tables WHERE table_schema = 'liquibase_prod';"
+    
+    - echo "Production deployment completed successfully!"
+  artifacts:
+    paths:
+      - labs/lab-17-liquibase-mysql/reports/prod-deployment-history.txt
+      - labs/lab-17-liquibase-mysql/reports/rollback-safety-plan.sql
+    expire_in: 4 weeks
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  dependencies:
+    - deploy_to_test
+  allow_failure: false
+
+# Rollback Jobs (Manual)
+rollback_development:
+  <<: *liquibase_job_definition
+  stage: deploy-dev
+  environment:
+    name: development
+  variables:
+    LIQUIBASE_COMMAND_CONTEXTS: development
+  script:
+    - echo "Rolling back Development environment..."
+    - cd labs/lab-17-liquibase-mysql
+    - |
+      if [ -z "$ROLLBACK_COUNT" ]; then
+        export ROLLBACK_COUNT=1
+      fi
+    - echo "Rolling back $ROLLBACK_COUNT changesets..."
+    - liquibase --defaults-file=liquibase.properties rollback-count $ROLLBACK_COUNT
+    - liquibase --defaults-file=liquibase.properties history
+    - echo "Development rollback completed!"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  allow_failure: true
+
+rollback_test:
+  <<: *liquibase_job_definition
+  stage: deploy-test
+  environment:
+    name: test
+  variables:
+    LIQUIBASE_COMMAND_CONTEXTS: test
+    LIQUIBASE_COMMAND_URL: jdbc:mysql://mysql:3306/liquibase_test
+  script:
+    - echo "Rolling back Test environment..."
+    - cd labs/lab-17-liquibase-mysql
+    - |
+      if [ -z "$ROLLBACK_COUNT" ]; then
+        export ROLLBACK_COUNT=1
+      fi
+    - echo "Rolling back $ROLLBACK_COUNT changesets..."
+    - liquibase --defaults-file=liquibase.properties rollback-count $ROLLBACK_COUNT
+    - liquibase --defaults-file=liquibase.properties history
+    - echo "Test rollback completed!"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  allow_failure: true
+
+# Database Documentation Generation
+generate_database_docs:
+  <<: *liquibase_job_definition
+  stage: test
+  script:
+    - echo "Generating database documentation..."
+    - cd labs/lab-17-liquibase-mysql
+    - mkdir -p reports/docs
+    
+    # Apply changes to get current schema
+    - liquibase --defaults-file=liquibase.properties update
+    
+    # Generate various documentation outputs
+    - liquibase --defaults-file=liquibase.properties history > reports/docs/changelog-history.txt
+    - liquibase --defaults-file=liquibase.properties status --verbose > reports/docs/current-status.txt
+    
+    # Export current schema structure
+    - mysql -h mysql -u $MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE -e "SHOW TABLES;" > reports/docs/table-list.txt
+    - |
+      for table in $(mysql -h mysql -u $MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE -sN -e "SHOW TABLES;"); do
+        echo "=== Table: $table ===" >> reports/docs/schema-structure.txt
+        mysql -h mysql -u $MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE -e "DESCRIBE $table;" >> reports/docs/schema-structure.txt
+        echo "" >> reports/docs/schema-structure.txt
+      done
+    
+    - echo "Database documentation generated successfully!"
+  artifacts:
+    paths:
+      - labs/lab-17-liquibase-mysql/reports/docs/
+    expire_in: 4 weeks
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
