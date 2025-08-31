@@ -1,0 +1,566 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Advanced Features - Version 1.2 -->
+    
+    <changeSet id="1.2.1-create-categories-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="categories"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create categories table with hierarchical structure.
+            Demonstrates self-referencing foreign keys and tree structures.
+        </comment>
+        
+        <createTable tableName="categories">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="slug" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="parent_id" type="BIGINT">
+                <constraints foreignKeyName="fk_categories_parent" references="categories(id)"/>
+            </column>
+            <column name="sort_order" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="meta_title" type="VARCHAR(200)"/>
+            <column name="meta_description" type="VARCHAR(500)"/>
+            <column name="image_url" type="VARCHAR(500)"/>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT">
+                <constraints foreignKeyName="fk_categories_created_by" references="users(id)"/>
+            </column>
+            <column name="updated_by" type="BIGINT">
+                <constraints foreignKeyName="fk_categories_updated_by" references="users(id)"/>
+            </column>
+        </createTable>
+        
+        <createIndex tableName="categories" indexName="idx_categories_parent_id">
+            <column name="parent_id"/>
+        </createIndex>
+        
+        <createIndex tableName="categories" indexName="idx_categories_slug">
+            <column name="slug"/>
+        </createIndex>
+        
+        <createIndex tableName="categories" indexName="idx_categories_sort_order">
+            <column name="sort_order"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="categories" indexName="idx_categories_parent_id"/>
+            <dropIndex tableName="categories" indexName="idx_categories_slug"/>
+            <dropIndex tableName="categories" indexName="idx_categories_sort_order"/>
+            <dropTable tableName="categories"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.2-modify-products-add-category-fk" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="products"/>
+            <tableExists tableName="categories"/>
+            <columnExists tableName="products" columnName="category"/>
+        </preConditions>
+        <comment>
+            Modify products table to use proper category foreign key.
+            Demonstrates changing from string category to normalized relationship.
+        </comment>
+        
+        <!-- Add new category_id column -->
+        <addColumn tableName="products">
+            <column name="category_id" type="BIGINT" afterColumn="category">
+                <constraints foreignKeyName="fk_products_category_id" references="categories(id)"/>
+            </column>
+        </addColumn>
+        
+        <!-- The old category column will be removed in a later changeset after data migration -->
+        <rollback>
+            <dropColumn tableName="products" columnName="category_id"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.3-seed-categories-data" author="liquibase-lab" context="development,test">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="categories"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM categories</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert hierarchical category data.
+            Creates a realistic category tree structure.
+        </comment>
+        
+        <!-- Root categories -->
+        <insert tableName="categories">
+            <column name="name" value="Electronics"/>
+            <column name="slug" value="electronics"/>
+            <column name="description" value="Electronic devices and accessories"/>
+            <column name="sort_order" value="1"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="categories">
+            <column name="name" value="Furniture"/>
+            <column name="slug" value="furniture"/>
+            <column name="description" value="Office and home furniture"/>
+            <column name="sort_order" value="2"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="categories">
+            <column name="name" value="Kitchen"/>
+            <column name="slug" value="kitchen"/>
+            <column name="description" value="Kitchen appliances and accessories"/>
+            <column name="sort_order" value="3"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <!-- Electronics subcategories -->
+        <insert tableName="categories">
+            <column name="name" value="Computers"/>
+            <column name="slug" value="computers"/>
+            <column name="description" value="Laptops, desktops, and computer accessories"/>
+            <column name="parent_id" valueComputed="(SELECT id FROM categories WHERE slug = 'electronics')"/>
+            <column name="sort_order" value="1"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="categories">
+            <column name="name" value="Mobile Accessories"/>
+            <column name="slug" value="mobile-accessories"/>
+            <column name="description" value="Cases, chargers, and mobile device accessories"/>
+            <column name="parent_id" valueComputed="(SELECT id FROM categories WHERE slug = 'electronics')"/>
+            <column name="sort_order" value="2"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <!-- Furniture subcategories -->
+        <insert tableName="categories">
+            <column name="name" value="Office Chairs"/>
+            <column name="slug" value="office-chairs"/>
+            <column name="description" value="Ergonomic and executive office chairs"/>
+            <column name="parent_id" valueComputed="(SELECT id FROM categories WHERE slug = 'furniture')"/>
+            <column name="sort_order" value="1"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="categories">
+            <column name="name" value="Desks"/>
+            <column name="slug" value="desks"/>
+            <column name="description" value="Standing desks, writing desks, and workstations"/>
+            <column name="parent_id" valueComputed="(SELECT id FROM categories WHERE slug = 'furniture')"/>
+            <column name="sort_order" value="2"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="categories"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.4-migrate-product-categories" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="products"/>
+            <tableExists tableName="categories"/>
+            <columnExists tableName="products" columnName="category"/>
+            <columnExists tableName="products" columnName="category_id"/>
+        </preConditions>
+        <comment>
+            Migrate existing product category strings to category IDs.
+            Demonstrates data migration between old and new schema designs.
+        </comment>
+        
+        <sql>
+            UPDATE products p
+            SET p.category_id = (
+                SELECT c.id FROM categories c 
+                WHERE c.name = p.category 
+                   OR c.slug = LOWER(REPLACE(p.category, ' ', '-'))
+                LIMIT 1
+            )
+            WHERE p.category IS NOT NULL 
+              AND p.category_id IS NULL;
+            
+            -- Handle products with categories that don't have exact matches
+            UPDATE products p
+            SET p.category_id = (
+                SELECT c.id FROM categories c 
+                WHERE c.name LIKE CONCAT('%', p.category, '%')
+                LIMIT 1
+            )
+            WHERE p.category IS NOT NULL 
+              AND p.category_id IS NULL;
+            
+            -- Set default category for any remaining products
+            UPDATE products p
+            SET p.category_id = (SELECT id FROM categories WHERE slug = 'electronics' LIMIT 1)
+            WHERE p.category_id IS NULL;
+        </sql>
+        
+        <rollback>
+            <sql>
+                UPDATE products SET category_id = NULL;
+            </sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.5-create-product-variants-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="product_variants"/>
+            </not>
+            <tableExists tableName="products"/>
+        </preConditions>
+        <comment>
+            Create product variants table for products with multiple options.
+            Demonstrates complex product modeling with variants and attributes.
+        </comment>
+        
+        <createTable tableName="product_variants">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="product_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_product_variants_product_id" references="products(id)"/>
+            </column>
+            <column name="variant_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sku" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="price_adjustment" type="DECIMAL(10,2)" defaultValueNumeric="0.00">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cost_adjustment" type="DECIMAL(10,2)" defaultValueNumeric="0.00">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quantity_available" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="weight" type="DECIMAL(8,3)"/>
+            <column name="dimensions" type="VARCHAR(50)"/>
+            <column name="color" type="VARCHAR(30)"/>
+            <column name="size" type="VARCHAR(30)"/>
+            <column name="material" type="VARCHAR(50)"/>
+            <column name="attributes" type="JSON"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT">
+                <constraints foreignKeyName="fk_product_variants_created_by" references="users(id)"/>
+            </column>
+            <column name="updated_by" type="BIGINT">
+                <constraints foreignKeyName="fk_product_variants_updated_by" references="users(id)"/>
+            </column>
+        </createTable>
+        
+        <createIndex tableName="product_variants" indexName="idx_product_variants_product_id">
+            <column name="product_id"/>
+        </createIndex>
+        
+        <createIndex tableName="product_variants" indexName="idx_product_variants_sku">
+            <column name="sku"/>
+        </createIndex>
+        
+        <createIndex tableName="product_variants" indexName="idx_product_variants_attributes">
+            <column name="color"/>
+            <column name="size"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="product_variants" indexName="idx_product_variants_product_id"/>
+            <dropIndex tableName="product_variants" indexName="idx_product_variants_sku"/>
+            <dropIndex tableName="product_variants" indexName="idx_product_variants_attributes"/>
+            <dropTable tableName="product_variants"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.6-create-shopping-cart-table" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="shopping_carts"/>
+            </not>
+            <tableExists tableName="users"/>
+            <tableExists tableName="products"/>
+        </preConditions>
+        <comment>
+            Create shopping cart functionality.
+            Demonstrates session-based cart management with user association.
+        </comment>
+        
+        <createTable tableName="shopping_carts">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="session_id" type="VARCHAR(128)"/>
+            <column name="user_id" type="BIGINT">
+                <constraints foreignKeyName="fk_shopping_carts_user_id" references="users(id)"/>
+            </column>
+            <column name="product_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_shopping_carts_product_id" references="products(id)"/>
+            </column>
+            <column name="variant_id" type="BIGINT">
+                <constraints foreignKeyName="fk_shopping_carts_variant_id" references="product_variants(id)"/>
+            </column>
+            <column name="quantity" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="unit_price" type="DECIMAL(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_price" type="DECIMAL(12,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="added_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <createIndex tableName="shopping_carts" indexName="idx_shopping_carts_session_id">
+            <column name="session_id"/>
+        </createIndex>
+        
+        <createIndex tableName="shopping_carts" indexName="idx_shopping_carts_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        
+        <createIndex tableName="shopping_carts" indexName="idx_shopping_carts_product_id">
+            <column name="product_id"/>
+        </createIndex>
+        
+        <!-- Constraint to ensure either session_id or user_id is provided -->
+        <sql>
+            ALTER TABLE shopping_carts 
+            ADD CONSTRAINT chk_shopping_carts_identification 
+            CHECK (session_id IS NOT NULL OR user_id IS NOT NULL);
+        </sql>
+        
+        <rollback>
+            <sql>ALTER TABLE shopping_carts DROP CONSTRAINT chk_shopping_carts_identification;</sql>
+            <dropIndex tableName="shopping_carts" indexName="idx_shopping_carts_session_id"/>
+            <dropIndex tableName="shopping_carts" indexName="idx_shopping_carts_user_id"/>
+            <dropIndex tableName="shopping_carts" indexName="idx_shopping_carts_product_id"/>
+            <dropTable tableName="shopping_carts"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.7-create-stored-procedures" author="liquibase-lab" dbms="mysql" runOnChange="true">
+        <comment>
+            Create stored procedures for common business operations.
+            Demonstrates database function creation and complex business logic.
+        </comment>
+        
+        <sql splitStatements="true" stripComments="false">
+            -- Drop existing procedures
+            DROP PROCEDURE IF EXISTS GetUserOrderSummary;
+            DROP PROCEDURE IF EXISTS UpdateProductPrice;
+            DROP PROCEDURE IF EXISTS CleanupExpiredSessions;
+            
+            -- Procedure to get user order summary
+            DELIMITER //
+            CREATE PROCEDURE GetUserOrderSummary(
+                IN p_user_id BIGINT,
+                IN p_start_date DATE,
+                IN p_end_date DATE
+            )
+            BEGIN
+                SELECT 
+                    u.username,
+                    COUNT(o.id) as total_orders,
+                    SUM(o.total_amount) as total_spent,
+                    AVG(o.total_amount) as average_order_value,
+                    MAX(o.order_date) as last_order_date
+                FROM users u
+                LEFT JOIN orders o ON u.id = o.user_id 
+                    AND o.order_date BETWEEN p_start_date AND p_end_date
+                    AND o.deleted_at IS NULL
+                WHERE u.id = p_user_id
+                GROUP BY u.id, u.username;
+            END//
+            DELIMITER ;
+            
+            -- Procedure to update product price with audit trail
+            DELIMITER //
+            CREATE PROCEDURE UpdateProductPrice(
+                IN p_product_id BIGINT,
+                IN p_new_price DECIMAL(10,2),
+                IN p_updated_by BIGINT,
+                IN p_reason VARCHAR(255)
+            )
+            BEGIN
+                DECLARE v_old_price DECIMAL(10,2);
+                DECLARE EXIT HANDLER FOR SQLEXCEPTION
+                BEGIN
+                    ROLLBACK;
+                    RESIGNAL;
+                END;
+                
+                START TRANSACTION;
+                
+                -- Get current price
+                SELECT price INTO v_old_price FROM products WHERE id = p_product_id;
+                
+                -- Update price
+                UPDATE products 
+                SET price = p_new_price,
+                    updated_by = p_updated_by,
+                    updated_at = NOW(),
+                    version = version + 1
+                WHERE id = p_product_id;
+                
+                -- Log the change
+                INSERT INTO audit_log (table_name, record_id, action, old_values, new_values, changed_by, change_reason, created_at)
+                VALUES ('products', p_product_id, 'UPDATE',
+                       JSON_OBJECT('price', v_old_price),
+                       JSON_OBJECT('price', p_new_price),
+                       p_updated_by, p_reason, NOW());
+                
+                COMMIT;
+            END//
+            DELIMITER ;
+            
+            -- Procedure to cleanup expired sessions
+            DELIMITER //
+            CREATE PROCEDURE CleanupExpiredSessions()
+            BEGIN
+                UPDATE user_sessions 
+                SET is_active = FALSE, 
+                    logout_at = NOW() 
+                WHERE expires_at &lt; NOW() 
+                  AND is_active = TRUE;
+                  
+                SELECT ROW_COUNT() as expired_sessions_count;
+            END//
+            DELIMITER ;
+        </sql>
+        
+        <rollback>
+            <sql>
+                DROP PROCEDURE IF EXISTS GetUserOrderSummary;
+                DROP PROCEDURE IF EXISTS UpdateProductPrice;
+                DROP PROCEDURE IF EXISTS CleanupExpiredSessions;
+            </sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.8-create-views" author="liquibase-lab" dbms="mysql" runOnChange="true">
+        <comment>
+            Create useful database views for reporting and queries.
+            Demonstrates view creation and complex data relationships.
+        </comment>
+        
+        <createView viewName="active_products_view" replaceIfExists="true">
+            <![CDATA[
+            SELECT 
+                p.id,
+                p.name,
+                p.sku,
+                p.price,
+                p.quantity_available,
+                c.name as category_name,
+                c.slug as category_slug,
+                COALESCE(pc.name, 'Uncategorized') as parent_category,
+                u_created.username as created_by_username,
+                u_updated.username as updated_by_username,
+                p.created_at,
+                p.updated_at
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN categories pc ON c.parent_id = pc.id
+            LEFT JOIN users u_created ON p.created_by = u_created.id
+            LEFT JOIN users u_updated ON p.updated_by = u_updated.id
+            WHERE p.is_active = TRUE 
+              AND p.deleted_at IS NULL
+              AND p.quantity_available > 0
+            ]]>
+        </createView>
+        
+        <createView viewName="order_summary_view" replaceIfExists="true">
+            <![CDATA[
+            SELECT 
+                o.id,
+                o.order_number,
+                o.status,
+                u.username as customer_name,
+                u.email as customer_email,
+                o.total_amount,
+                o.order_date,
+                COUNT(oi.id) as item_count,
+                SUM(oi.quantity) as total_quantity,
+                DATEDIFF(NOW(), o.order_date) as days_since_order
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            LEFT JOIN order_items oi ON o.id = oi.order_id
+            WHERE o.deleted_at IS NULL
+            GROUP BY o.id, o.order_number, o.status, u.username, u.email, 
+                     o.total_amount, o.order_date
+            ]]>
+        </createView>
+        
+        <createView viewName="user_activity_summary" replaceIfExists="true">
+            <![CDATA[
+            SELECT 
+                u.id,
+                u.username,
+                u.email,
+                u.first_name,
+                u.last_name,
+                COUNT(DISTINCT o.id) as total_orders,
+                COALESCE(SUM(o.total_amount), 0) as total_spent,
+                COUNT(DISTINCT sc.id) as cart_items,
+                MAX(o.order_date) as last_order_date,
+                MAX(us.last_activity_at) as last_login,
+                u.created_at as registration_date
+            FROM users u
+            LEFT JOIN orders o ON u.id = o.user_id AND o.deleted_at IS NULL
+            LEFT JOIN shopping_carts sc ON u.id = sc.user_id
+            LEFT JOIN user_sessions us ON u.id = us.user_id AND us.is_active = TRUE
+            WHERE u.deleted_at IS NULL
+            GROUP BY u.id, u.username, u.email, u.first_name, u.last_name, u.created_at
+            ]]>
+        </createView>
+        
+        <rollback>
+            <dropView viewName="active_products_view"/>
+            <dropView viewName="order_summary_view"/>
+            <dropView viewName="user_activity_summary"/>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>
