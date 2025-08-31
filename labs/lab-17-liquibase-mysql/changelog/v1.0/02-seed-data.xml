@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Seed Data - Version 1.0 -->
+    
+    <changeSet id="1.0.6-seed-users-data" author="liquibase-lab" context="development,test">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="users"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM users</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert sample users data for testing and development.
+            This changeset only runs in development and test contexts.
+        </comment>
+        
+        <insert tableName="users">
+            <column name="username" value="admin"/>
+            <column name="email" value="admin@example.com"/>
+            <column name="password_hash" value="$2a$10$example_hashed_password_admin"/>
+            <column name="first_name" value="System"/>
+            <column name="last_name" value="Administrator"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="johndoe"/>
+            <column name="email" value="john.doe@example.com"/>
+            <column name="password_hash" value="$2a$10$example_hashed_password_john"/>
+            <column name="first_name" value="John"/>
+            <column name="last_name" value="Doe"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="janedoe"/>
+            <column name="email" value="jane.doe@example.com"/>
+            <column name="password_hash" value="$2a$10$example_hashed_password_jane"/>
+            <column name="first_name" value="Jane"/>
+            <column name="last_name" value="Doe"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="testuser"/>
+            <column name="email" value="test@example.com"/>
+            <column name="password_hash" value="$2a$10$example_hashed_password_test"/>
+            <column name="first_name" value="Test"/>
+            <column name="last_name" value="User"/>
+            <column name="is_active" valueBoolean="false"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="users">
+                <where>username IN ('admin', 'johndoe', 'janedoe', 'testuser')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.7-seed-products-data" author="liquibase-lab" context="development,test">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="products"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM products</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert sample products data for testing and development.
+            Includes various product categories and pricing examples.
+        </comment>
+        
+        <insert tableName="products">
+            <column name="name" value="Laptop Pro 15"/>
+            <column name="description" value="High-performance laptop with 15-inch display, perfect for professionals"/>
+            <column name="sku" value="LAP-PRO-15-001"/>
+            <column name="price" value="1299.99"/>
+            <column name="cost" value="899.99"/>
+            <column name="quantity_available" value="50"/>
+            <column name="category" value="Electronics"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Wireless Mouse"/>
+            <column name="description" value="Ergonomic wireless mouse with precision tracking"/>
+            <column name="sku" value="MSE-WRL-001"/>
+            <column name="price" value="29.99"/>
+            <column name="cost" value="15.99"/>
+            <column name="quantity_available" value="200"/>
+            <column name="category" value="Electronics"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Office Chair Deluxe"/>
+            <column name="description" value="Comfortable office chair with lumbar support and adjustable height"/>
+            <column name="sku" value="CHR-OFC-DLX-001"/>
+            <column name="price" value="249.99"/>
+            <column name="cost" value="149.99"/>
+            <column name="quantity_available" value="75"/>
+            <column name="category" value="Furniture"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Standing Desk"/>
+            <column name="description" value="Height-adjustable standing desk for healthier work habits"/>
+            <column name="sku" value="DSK-STD-001"/>
+            <column name="price" value="399.99"/>
+            <column name="cost" value="249.99"/>
+            <column name="quantity_available" value="25"/>
+            <column name="category" value="Furniture"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Coffee Mug Set"/>
+            <column name="description" value="Set of 4 ceramic coffee mugs with modern design"/>
+            <column name="sku" value="MUG-SET-001"/>
+            <column name="price" value="19.99"/>
+            <column name="cost" value="8.99"/>
+            <column name="quantity_available" value="100"/>
+            <column name="category" value="Kitchen"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Smartphone Case"/>
+            <column name="description" value="Protective case for popular smartphone models"/>
+            <column name="sku" value="CSE-PHN-001"/>
+            <column name="price" value="15.99"/>
+            <column name="cost" value="6.99"/>
+            <column name="quantity_available" value="300"/>
+            <column name="category" value="Electronics"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <!-- Inactive product for testing -->
+        <insert tableName="products">
+            <column name="name" value="Discontinued Item"/>
+            <column name="description" value="This product is no longer available"/>
+            <column name="sku" value="DSC-ITM-001"/>
+            <column name="price" value="0.00"/>
+            <column name="cost" value="0.00"/>
+            <column name="quantity_available" value="0"/>
+            <column name="category" value="Discontinued"/>
+            <column name="is_active" valueBoolean="false"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="products">
+                <where>sku IN ('LAP-PRO-15-001', 'MSE-WRL-001', 'CHR-OFC-DLX-001', 'DSK-STD-001', 'MUG-SET-001', 'CSE-PHN-001', 'DSC-ITM-001')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.8-seed-orders-data" author="liquibase-lab" context="development,test">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="orders"/>
+            <tableExists tableName="users"/>
+            <tableExists tableName="products"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM orders</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert sample orders data for testing and development.
+            Creates realistic order scenarios with different statuses.
+        </comment>
+        
+        <!-- Order 1: Completed order for John Doe -->
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'johndoe')"/>
+            <column name="order_number" value="ORD-2024-001"/>
+            <column name="status" value="DELIVERED"/>
+            <column name="total_amount" value="1349.98"/>
+            <column name="tax_amount" value="135.00"/>
+            <column name="shipping_amount" value="15.00"/>
+            <column name="order_date" value="2024-08-01 10:30:00"/>
+            <column name="shipped_date" value="2024-08-02 14:15:00"/>
+            <column name="delivered_date" value="2024-08-05 16:45:00"/>
+        </insert>
+        
+        <!-- Order 2: Processing order for Jane Doe -->
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'janedoe')"/>
+            <column name="order_number" value="ORD-2024-002"/>
+            <column name="status" value="PROCESSING"/>
+            <column name="total_amount" value="269.98"/>
+            <column name="tax_amount" value="27.00"/>
+            <column name="shipping_amount" value="10.00"/>
+            <column name="order_date" value="2024-08-15 14:20:00"/>
+        </insert>
+        
+        <!-- Order 3: Pending order for John Doe -->
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'johndoe')"/>
+            <column name="order_number" value="ORD-2024-003"/>
+            <column name="status" value="PENDING"/>
+            <column name="total_amount" value="419.98"/>
+            <column name="tax_amount" value="42.00"/>
+            <column name="shipping_amount" value="20.00"/>
+            <column name="order_date" value="2024-08-30 09:15:00"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="orders">
+                <where>order_number IN ('ORD-2024-001', 'ORD-2024-002', 'ORD-2024-003')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.9-seed-order-items-data" author="liquibase-lab" context="development,test">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="order_items"/>
+            <tableExists tableName="orders"/>
+            <tableExists tableName="products"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM order_items</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert sample order items data for testing and development.
+            Links products to orders to create complete transaction records.
+        </comment>
+        
+        <!-- Order 1 Items (ORD-2024-001) -->
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-001')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'LAP-PRO-15-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="1299.99"/>
+            <column name="total_price" value="1299.99"/>
+        </insert>
+        
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-001')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'MSE-WRL-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="29.99"/>
+            <column name="total_price" value="29.99"/>
+        </insert>
+        
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-001')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'MUG-SET-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="19.99"/>
+            <column name="total_price" value="19.99"/>
+        </insert>
+        
+        <!-- Order 2 Items (ORD-2024-002) -->
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-002')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'CHR-OFC-DLX-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="249.99"/>
+            <column name="total_price" value="249.99"/>
+        </insert>
+        
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-002')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'MUG-SET-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="19.99"/>
+            <column name="total_price" value="19.99"/>
+        </insert>
+        
+        <!-- Order 3 Items (ORD-2024-003) -->
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-003')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'DSK-STD-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="399.99"/>
+            <column name="total_price" value="399.99"/>
+        </insert>
+        
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-003')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'MUG-SET-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="19.99"/>
+            <column name="total_price" value="19.99"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="order_items">
+                <where>order_id IN (
+                    SELECT id FROM orders WHERE order_number IN ('ORD-2024-001', 'ORD-2024-002', 'ORD-2024-003')
+                )</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <!-- Load data from CSV files (alternative approach) -->
+    <changeSet id="1.0.10-load-csv-demo" author="liquibase-lab" context="development" runOnChange="true">
+        <comment>
+            Demonstrates loading data from CSV files.
+            This is an alternative to individual insert statements for bulk data loading.
+        </comment>
+        <loadData 
+            file="data/additional-products.csv" 
+            tableName="products"
+            relativeToChangelogFile="true"
+            separator=","
+            quotchar='"'>
+            <column name="id" type="NUMERIC"/>
+            <column name="name" type="STRING"/>
+            <column name="description" type="STRING"/>
+            <column name="sku" type="STRING"/>
+            <column name="price" type="NUMERIC"/>
+            <column name="cost" type="NUMERIC"/>
+            <column name="quantity_available" type="NUMERIC"/>
+            <column name="category" type="STRING"/>
+            <column name="is_active" type="BOOLEAN"/>
+        </loadData>
+        
+        <rollback>
+            <delete tableName="products">
+                <where>sku LIKE 'CSV-%'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>
