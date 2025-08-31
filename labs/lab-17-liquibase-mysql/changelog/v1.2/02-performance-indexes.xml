@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Performance Indexes - Version 1.2 -->
+    
+    <changeSet id="1.2.9-create-composite-indexes" author="liquibase-lab" dbms="mysql">
+        <comment>
+            Create composite indexes for commonly queried column combinations.
+            Demonstrates performance optimization through strategic indexing.
+        </comment>
+        
+        <!-- Users table composite indexes -->
+        <createIndex tableName="users" indexName="idx_users_active_created">
+            <column name="is_active"/>
+            <column name="created_at"/>
+        </createIndex>
+        
+        <createIndex tableName="users" indexName="idx_users_name_search">
+            <column name="last_name"/>
+            <column name="first_name"/>
+            <column name="is_active"/>
+        </createIndex>
+        
+        <!-- Products table performance indexes -->
+        <createIndex tableName="products" indexName="idx_products_category_active_price">
+            <column name="category_id"/>
+            <column name="is_active"/>
+            <column name="price"/>
+        </createIndex>
+        
+        <createIndex tableName="products" indexName="idx_products_inventory_status">
+            <column name="is_active"/>
+            <column name="quantity_available"/>
+            <column name="deleted_at"/>
+        </createIndex>
+        
+        <createIndex tableName="products" indexName="idx_products_search_text">
+            <column name="name"/>
+            <column name="sku"/>
+            <column name="is_active"/>
+        </createIndex>
+        
+        <!-- Orders table performance indexes -->
+        <createIndex tableName="orders" indexName="idx_orders_user_status_date">
+            <column name="user_id"/>
+            <column name="status"/>
+            <column name="order_date"/>
+        </createIndex>
+        
+        <createIndex tableName="orders" indexName="idx_orders_status_amount">
+            <column name="status"/>
+            <column name="total_amount"/>
+            <column name="order_date"/>
+        </createIndex>
+        
+        <createIndex tableName="orders" indexName="idx_orders_date_range">
+            <column name="order_date"/>
+            <column name="status"/>
+            <column name="deleted_at"/>
+        </createIndex>
+        
+        <!-- Order items performance indexes -->
+        <createIndex tableName="order_items" indexName="idx_order_items_product_summary">
+            <column name="product_id"/>
+            <column name="created_at"/>
+            <column name="quantity"/>
+        </createIndex>
+        
+        <!-- Audit log performance indexes -->
+        <createIndex tableName="audit_log" indexName="idx_audit_log_date_table_action">
+            <column name="created_at"/>
+            <column name="table_name"/>
+            <column name="action"/>
+        </createIndex>
+        
+        <createIndex tableName="audit_log" indexName="idx_audit_log_user_date">
+            <column name="changed_by"/>
+            <column name="created_at"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="users" indexName="idx_users_active_created"/>
+            <dropIndex tableName="users" indexName="idx_users_name_search"/>
+            <dropIndex tableName="products" indexName="idx_products_category_active_price"/>
+            <dropIndex tableName="products" indexName="idx_products_inventory_status"/>
+            <dropIndex tableName="products" indexName="idx_products_search_text"/>
+            <dropIndex tableName="orders" indexName="idx_orders_user_status_date"/>
+            <dropIndex tableName="orders" indexName="idx_orders_status_amount"/>
+            <dropIndex tableName="orders" indexName="idx_orders_date_range"/>
+            <dropIndex tableName="order_items" indexName="idx_order_items_product_summary"/>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_date_table_action"/>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_user_date"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.10-create-fulltext-indexes" author="liquibase-lab" dbms="mysql">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="products"/>
+            <columnExists tableName="products" columnName="name"/>
+            <columnExists tableName="products" columnName="description"/>
+        </preConditions>
+        <comment>
+            Create full-text search indexes for text search capabilities.
+            Demonstrates MySQL full-text search functionality.
+        </comment>
+        
+        <sql>
+            ALTER TABLE products 
+            ADD FULLTEXT INDEX idx_products_fulltext_search (name, description);
+        </sql>
+        
+        <sql>
+            ALTER TABLE categories 
+            ADD FULLTEXT INDEX idx_categories_fulltext_search (name, description);
+        </sql>
+        
+        <rollback>
+            <sql>ALTER TABLE products DROP INDEX idx_products_fulltext_search;</sql>
+            <sql>ALTER TABLE categories DROP INDEX idx_categories_fulltext_search;</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.11-optimize-table-settings" author="liquibase-lab" dbms="mysql">
+        <comment>
+            Optimize table settings for better performance.
+            Demonstrates MySQL-specific table optimization techniques.
+        </comment>
+        
+        <sql>
+            -- Optimize products table
+            ALTER TABLE products 
+            ENGINE=InnoDB 
+            ROW_FORMAT=DYNAMIC 
+            CHARSET=utf8mb4 
+            COLLATE=utf8mb4_unicode_ci;
+            
+            -- Optimize orders table  
+            ALTER TABLE orders 
+            ENGINE=InnoDB 
+            ROW_FORMAT=DYNAMIC 
+            CHARSET=utf8mb4 
+            COLLATE=utf8mb4_unicode_ci;
+            
+            -- Optimize users table
+            ALTER TABLE users 
+            ENGINE=InnoDB 
+            ROW_FORMAT=DYNAMIC 
+            CHARSET=utf8mb4 
+            COLLATE=utf8mb4_unicode_ci;
+            
+            -- Optimize audit_log table for append-heavy workload
+            ALTER TABLE audit_log 
+            ENGINE=InnoDB 
+            ROW_FORMAT=COMPRESSED 
+            KEY_BLOCK_SIZE=8
+            CHARSET=utf8mb4 
+            COLLATE=utf8mb4_unicode_ci;
+        </sql>
+        
+        <rollback>
+            <!-- Rollback would restore original table settings, but this is typically not needed -->
+            <empty/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.12-create-partitioning-demo" author="liquibase-lab" dbms="mysql" context="development">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="audit_log"/>
+        </preConditions>
+        <comment>
+            Demonstrate table partitioning for large tables (development only).
+            Shows advanced MySQL partitioning for performance at scale.
+            Note: This is for demonstration - real partitioning should be planned carefully.
+        </comment>
+        
+        <sql>
+            -- Create a partitioned version of audit_log for demonstration
+            CREATE TABLE audit_log_partitioned (
+                id BIGINT AUTO_INCREMENT,
+                table_name VARCHAR(50) NOT NULL,
+                record_id BIGINT NOT NULL,
+                action ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL,
+                old_values JSON,
+                new_values JSON,
+                changed_by BIGINT,
+                change_reason VARCHAR(255),
+                ip_address VARCHAR(45),
+                user_agent TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id, created_at),
+                KEY idx_audit_log_part_table_record (table_name, record_id),
+                KEY idx_audit_log_part_changed_by (changed_by),
+                CONSTRAINT fk_audit_log_part_changed_by 
+                    FOREIGN KEY (changed_by) REFERENCES users(id)
+            ) ENGINE=InnoDB
+            PARTITION BY RANGE (YEAR(created_at)) (
+                PARTITION p2023 VALUES LESS THAN (2024),
+                PARTITION p2024 VALUES LESS THAN (2025),
+                PARTITION p2025 VALUES LESS THAN (2026),
+                PARTITION p_future VALUES LESS THAN MAXVALUE
+            );
+        </sql>
+        
+        <rollback>
+            <sql>DROP TABLE IF EXISTS audit_log_partitioned;</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.13-create-database-statistics" author="liquibase-lab" dbms="mysql" runOnChange="true">
+        <comment>
+            Create views for database statistics and monitoring.
+            Provides insights into database performance and usage patterns.
+        </comment>
+        
+        <createView viewName="database_statistics" replaceIfExists="true">
+            <![CDATA[
+            SELECT 
+                'users' as table_name,
+                COUNT(*) as total_records,
+                COUNT(CASE WHEN is_active = 1 THEN 1 END) as active_records,
+                COUNT(CASE WHEN deleted_at IS NOT NULL THEN 1 END) as soft_deleted_records,
+                MIN(created_at) as oldest_record,
+                MAX(created_at) as newest_record
+            FROM users
+            
+            UNION ALL
+            
+            SELECT 
+                'products' as table_name,
+                COUNT(*) as total_records,
+                COUNT(CASE WHEN is_active = 1 AND deleted_at IS NULL THEN 1 END) as active_records,
+                COUNT(CASE WHEN deleted_at IS NOT NULL THEN 1 END) as soft_deleted_records,
+                MIN(created_at) as oldest_record,
+                MAX(created_at) as newest_record
+            FROM products
+            
+            UNION ALL
+            
+            SELECT 
+                'orders' as table_name,
+                COUNT(*) as total_records,
+                COUNT(CASE WHEN status IN ('PENDING', 'PROCESSING', 'SHIPPED') THEN 1 END) as active_records,
+                COUNT(CASE WHEN deleted_at IS NOT NULL THEN 1 END) as soft_deleted_records,
+                MIN(created_at) as oldest_record,
+                MAX(created_at) as newest_record
+            FROM orders
+            
+            UNION ALL
+            
+            SELECT 
+                'audit_log' as table_name,
+                COUNT(*) as total_records,
+                COUNT(*) as active_records,
+                0 as soft_deleted_records,
+                MIN(created_at) as oldest_record,
+                MAX(created_at) as newest_record
+            FROM audit_log
+            ]]>
+        </createView>
+        
+        <createView viewName="index_usage_stats" replaceIfExists="true">
+            <![CDATA[
+            SELECT 
+                s.TABLE_SCHEMA as database_name,
+                s.TABLE_NAME as table_name,
+                s.INDEX_NAME as index_name,
+                s.COLUMN_NAME as column_name,
+                s.CARDINALITY as cardinality,
+                CASE s.NON_UNIQUE 
+                    WHEN 0 THEN 'UNIQUE' 
+                    ELSE 'NON-UNIQUE' 
+                END as index_type,
+                t.TABLE_ROWS as estimated_rows
+            FROM information_schema.STATISTICS s
+            JOIN information_schema.TABLES t ON s.TABLE_SCHEMA = t.TABLE_SCHEMA 
+                AND s.TABLE_NAME = t.TABLE_NAME
+            WHERE s.TABLE_SCHEMA = DATABASE()
+              AND s.TABLE_NAME IN ('users', 'products', 'orders', 'order_items', 'categories')
+            ORDER BY s.TABLE_NAME, s.INDEX_NAME, s.SEQ_IN_INDEX
+            ]]>
+        </createView>
+        
+        <rollback>
+            <dropView viewName="database_statistics"/>
+            <dropView viewName="index_usage_stats"/>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>
