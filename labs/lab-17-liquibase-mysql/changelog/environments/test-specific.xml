@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Test Environment Specific Changes -->
+    
+    <changeSet id="test-1.0.1-create-test-users" author="liquibase-lab" context="test">
+        <comment>
+            Create test users for automated testing scenarios.
+            These users have predictable data for reliable test assertions.
+        </comment>
+        
+        <insert tableName="users">
+            <column name="username" value="testuser1"/>
+            <column name="email" value="testuser1@test.local"/>
+            <column name="password_hash" value="$2a$10$test_hash_user1"/>
+            <column name="first_name" value="Test"/>
+            <column name="last_name" value="User One"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="testuser2"/>
+            <column name="email" value="testuser2@test.local"/>
+            <column name="password_hash" value="$2a$10$test_hash_user2"/>
+            <column name="first_name" value="Test"/>
+            <column name="last_name" value="User Two"/>
+            <column name="is_active" valueBoolean="false"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="testadmin"/>
+            <column name="email" value="testadmin@test.local"/>
+            <column name="password_hash" value="$2a$10$test_hash_admin"/>
+            <column name="first_name" value="Test"/>
+            <column name="last_name" value="Administrator"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="users">
+                <where>username IN ('testuser1', 'testuser2', 'testadmin')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.0.2-assign-test-roles" author="liquibase-lab" context="test">
+        <comment>
+            Assign specific roles to test users for role-based testing.
+        </comment>
+        
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'testuser1')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'USER')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'testadmin')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'ADMIN')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="user_roles">
+                <where>user_id IN (
+                    SELECT id FROM users 
+                    WHERE username IN ('testuser1', 'testuser2', 'testadmin')
+                )</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.0.3-create-test-products" author="liquibase-lab" context="test">
+        <comment>
+            Create predictable test products for automated testing.
+        </comment>
+        
+        <insert tableName="products">
+            <column name="name" value="Test Product Alpha"/>
+            <column name="description" value="Standardized test product for automated testing - Alpha variant"/>
+            <column name="sku" value="TEST-ALPHA-001"/>
+            <column name="price" value="100.00"/>
+            <column name="cost" value="50.00"/>
+            <column name="quantity_available" value="10"/>
+            <column name="category_id" valueComputed="(SELECT id FROM categories WHERE slug = 'electronics' LIMIT 1)"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Test Product Beta"/>
+            <column name="description" value="Standardized test product for automated testing - Beta variant"/>
+            <column name="sku" value="TEST-BETA-001"/>
+            <column name="price" value="200.00"/>
+            <column name="cost" value="100.00"/>
+            <column name="quantity_available" value="5"/>
+            <column name="category_id" valueComputed="(SELECT id FROM categories WHERE slug = 'electronics' LIMIT 1)"/>
+            <column name="is_active" valueBoolean="true"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Test Product Inactive"/>
+            <column name="description" value="Inactive test product for testing edge cases"/>
+            <column name="sku" value="TEST-INACTIVE-001"/>
+            <column name="price" value="0.00"/>
+            <column name="cost" value="0.00"/>
+            <column name="quantity_available" value="0"/>
+            <column name="category_id" valueComputed="(SELECT id FROM categories WHERE slug = 'electronics' LIMIT 1)"/>
+            <column name="is_active" valueBoolean="false"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="products">
+                <where>sku LIKE 'TEST-%'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.0.4-create-test-orders" author="liquibase-lab" context="test">
+        <comment>
+            Create standardized test orders for automated testing scenarios.
+        </comment>
+        
+        <!-- Completed test order -->
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'testuser1')"/>
+            <column name="order_number" value="TEST-ORD-COMPLETED"/>
+            <column name="status" value="DELIVERED"/>
+            <column name="total_amount" value="110.00"/>
+            <column name="tax_amount" value="10.00"/>
+            <column name="shipping_amount" value="10.00"/>
+            <column name="order_date" value="2024-08-01 10:00:00"/>
+            <column name="shipped_date" value="2024-08-02 10:00:00"/>
+            <column name="delivered_date" value="2024-08-05 10:00:00"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'testuser1')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'testuser1')"/>
+        </insert>
+        
+        <!-- Pending test order -->
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'testuser1')"/>
+            <column name="order_number" value="TEST-ORD-PENDING"/>
+            <column name="status" value="PENDING"/>
+            <column name="total_amount" value="220.00"/>
+            <column name="tax_amount" value="20.00"/>
+            <column name="shipping_amount" value="15.00"/>
+            <column name="order_date" value="2024-08-30 10:00:00"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'testuser1')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'testuser1')"/>
+        </insert>
+        
+        <!-- Cancelled test order -->
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'testuser1')"/>
+            <column name="order_number" value="TEST-ORD-CANCELLED"/>
+            <column name="status" value="CANCELLED"/>
+            <column name="total_amount" value="100.00"/>
+            <column name="tax_amount" value="10.00"/>
+            <column name="shipping_amount" value="10.00"/>
+            <column name="order_date" value="2024-08-15 10:00:00"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'testuser1')"/>
+            <column name="updated_by" valueComputed="(SELECT id FROM users WHERE username = 'testuser1')"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="orders">
+                <where>order_number LIKE 'TEST-ORD-%'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.0.5-create-test-order-items" author="liquibase-lab" context="test">
+        <comment>
+            Create order items for test orders to complete the test data set.
+        </comment>
+        
+        <!-- Items for completed order -->
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'TEST-ORD-COMPLETED')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'TEST-ALPHA-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="100.00"/>
+            <column name="total_price" value="100.00"/>
+        </insert>
+        
+        <!-- Items for pending order -->
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'TEST-ORD-PENDING')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'TEST-ALPHA-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="100.00"/>
+            <column name="total_price" value="100.00"/>
+        </insert>
+        
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'TEST-ORD-PENDING')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'TEST-BETA-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="100.00"/>
+            <column name="total_price" value="100.00"/>
+        </insert>
+        
+        <!-- Items for cancelled order -->
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'TEST-ORD-CANCELLED')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'TEST-ALPHA-001')"/>
+            <column name="quantity" value="1"/>
+            <column name="unit_price" value="100.00"/>
+            <column name="total_price" value="100.00"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="order_items">
+                <where>order_id IN (
+                    SELECT id FROM orders WHERE order_number LIKE 'TEST-ORD-%'
+                )</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.0.6-create-test-validation-table" author="liquibase-lab" context="test">
+        <comment>
+            Create a table specifically for testing database constraints and validation.
+        </comment>
+        
+        <createTable tableName="test_validations">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="test_case_name" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="test_description" type="TEXT"/>
+            <column name="expected_result" type="VARCHAR(50)"/>
+            <column name="actual_result" type="VARCHAR(50)"/>
+            <column name="test_status" type="ENUM('PASS', 'FAIL', 'PENDING')" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="test_data" type="JSON"/>
+            <column name="created_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="DATETIME" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <createIndex tableName="test_validations" indexName="idx_test_validations_status">
+            <column name="test_status"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="test_validations" indexName="idx_test_validations_status"/>
+            <dropTable tableName="test_validations"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.0.7-insert-test-validation-cases" author="liquibase-lab" context="test">
+        <comment>
+            Insert standard test validation cases for verifying database integrity.
+        </comment>
+        
+        <insert tableName="test_validations">
+            <column name="test_case_name" value="users_email_unique_constraint"/>
+            <column name="test_description" value="Verify that users table enforces unique email constraint"/>
+            <column name="expected_result" value="CONSTRAINT_VIOLATION"/>
+            <column name="test_status" value="PENDING"/>
+        </insert>
+        
+        <insert tableName="test_validations">
+            <column name="test_case_name" value="orders_foreign_key_user_id"/>
+            <column name="test_description" value="Verify that orders table enforces foreign key constraint to users"/>
+            <column name="expected_result" value="FOREIGN_KEY_VIOLATION"/>
+            <column name="test_status" value="PENDING"/>
+        </insert>
+        
+        <insert tableName="test_validations">
+            <column name="test_case_name" value="products_sku_unique_constraint"/>
+            <column name="test_description" value="Verify that products table enforces unique SKU constraint"/>
+            <column name="expected_result" value="CONSTRAINT_VIOLATION"/>
+            <column name="test_status" value="PENDING"/>
+        </insert>
+        
+        <insert tableName="test_validations">
+            <column name="test_case_name" value="audit_log_trigger_insert"/>
+            <column name="test_description" value="Verify that audit triggers fire correctly on product insert"/>
+            <column name="expected_result" value="AUDIT_RECORD_CREATED"/>
+            <column name="test_status" value="PENDING"/>
+        </insert>
+        
+        <insert tableName="test_validations">
+            <column name="test_case_name" value="user_roles_unique_constraint"/>
+            <column name="test_description" value="Verify that user_roles table prevents duplicate role assignments"/>
+            <column name="expected_result" value="CONSTRAINT_VIOLATION"/>
+            <column name="test_status" value="PENDING"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="test_validations"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.0.8-create-test-cleanup-procedures" author="liquibase-lab" context="test" runOnChange="true">
+        <comment>
+            Create procedures for cleaning up test data between test runs.
+        </comment>
+        
+        <sql splitStatements="true" stripComments="false">
+            DROP PROCEDURE IF EXISTS CleanupTestData;
+            DROP PROCEDURE IF EXISTS ResetTestSequences;
+            
+            -- Procedure to cleanup test-specific data
+            DELIMITER //
+            CREATE PROCEDURE CleanupTestData()
+            BEGIN
+                DECLARE EXIT HANDLER FOR SQLEXCEPTION
+                BEGIN
+                    ROLLBACK;
+                    RESIGNAL;
+                END;
+                
+                START TRANSACTION;
+                
+                -- Delete test order items first (foreign key constraint)
+                DELETE FROM order_items 
+                WHERE order_id IN (
+                    SELECT id FROM orders WHERE order_number LIKE 'TEST-%'
+                );
+                
+                -- Delete test orders
+                DELETE FROM orders WHERE order_number LIKE 'TEST-%';
+                
+                -- Delete test products
+                DELETE FROM products WHERE sku LIKE 'TEST-%';
+                
+                -- Delete test user roles
+                DELETE ur FROM user_roles ur
+                JOIN users u ON ur.user_id = u.id
+                WHERE u.username LIKE 'test%';
+                
+                -- Delete test users
+                DELETE FROM users WHERE username LIKE 'test%';
+                
+                -- Reset test validation results
+                UPDATE test_validations 
+                SET test_status = 'PENDING', 
+                    actual_result = NULL,
+                    updated_at = NOW();
+                
+                -- Clear audit log test entries
+                DELETE FROM audit_log 
+                WHERE table_name IN ('test_validations') 
+                   OR change_reason LIKE '%TEST%';
+                
+                COMMIT;
+                
+                SELECT 'Test data cleanup completed successfully' as result;
+            END//
+            DELIMITER ;
+            
+            -- Procedure to reset auto-increment sequences for consistent testing
+            DELIMITER //
+            CREATE PROCEDURE ResetTestSequences()
+            BEGIN
+                -- Note: Be careful with this in production!
+                -- This is only for test environments
+                
+                SET @max_user_id = (SELECT COALESCE(MAX(id), 0) FROM users);
+                SET @max_product_id = (SELECT COALESCE(MAX(id), 0) FROM products);
+                SET @max_order_id = (SELECT COALESCE(MAX(id), 0) FROM orders);
+                
+                SET @sql = CONCAT('ALTER TABLE users AUTO_INCREMENT = ', @max_user_id + 1);
+                PREPARE stmt FROM @sql;
+                EXECUTE stmt;
+                DEALLOCATE PREPARE stmt;
+                
+                SET @sql = CONCAT('ALTER TABLE products AUTO_INCREMENT = ', @max_product_id + 1);
+                PREPARE stmt FROM @sql;
+                EXECUTE stmt;
+                DEALLOCATE PREPARE stmt;
+                
+                SET @sql = CONCAT('ALTER TABLE orders AUTO_INCREMENT = ', @max_order_id + 1);
+                PREPARE stmt FROM @sql;
+                EXECUTE stmt;
+                DEALLOCATE PREPARE stmt;
+                
+                SELECT 'Test sequences reset successfully' as result;
+            END//
+            DELIMITER ;
+        </sql>
+        
+        <rollback>
+            <sql>
+                DROP PROCEDURE IF EXISTS CleanupTestData;
+                DROP PROCEDURE IF EXISTS ResetTestSequences;
+            </sql>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>
