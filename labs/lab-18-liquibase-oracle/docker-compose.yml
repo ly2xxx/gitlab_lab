@@ -15,7 +15,7 @@ services:
       - oracle_data:/opt/oracle/oradata
       - ./init-scripts:/container-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "sqlplus", "-S", "liquibase/liquibase_password@//localhost:1521/XE", "<<<", "SELECT 1 FROM DUAL;"]
+      test: ["CMD", "sqlplus", "-S", "liquibase/liquibase_password@//host.docker.internal:1521/XE", "<<<", "SELECT 1 FROM DUAL;"]
       timeout: 10s
       retries: 10
       interval: 10s
@@ -37,7 +37,7 @@ services:
       - ./liquibase.properties:/liquibase/liquibase.properties
       - ./scripts:/liquibase/scripts
     environment:
-      LIQUIBASE_COMMAND_URL: jdbc:oracle:thin:@oracle:1521:XE
+      LIQUIBASE_COMMAND_URL: jdbc:oracle:thin:@oracle:1521/XEPDB1
       LIQUIBASE_COMMAND_USERNAME: liquibase
       LIQUIBASE_COMMAND_PASSWORD: liquibase_password
       LIQUIBASE_COMMAND_CHANGELOG_FILE: /liquibase/changelog/db-changelog-master.xml
@@ -60,7 +60,7 @@ services:
       - ./changelog:/liquibase/changelog
       - ./liquibase.properties:/liquibase/liquibase.properties
     environment:
-      LIQUIBASE_COMMAND_URL: jdbc:oracle:thin:@oracle:1521:XE
+      LIQUIBASE_COMMAND_URL: jdbc:oracle:thin:@oracle:1521/XEPDB1
       LIQUIBASE_COMMAND_USERNAME: liquibase
       LIQUIBASE_COMMAND_PASSWORD: liquibase_password
       LIQUIBASE_COMMAND_CHANGELOG_FILE: /liquibase/changelog/db-changelog-master.xml
