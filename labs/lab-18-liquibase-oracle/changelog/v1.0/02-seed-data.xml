@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Data Seeding - Version 1.0 for Oracle Database -->
+    
+    <changeSet id="1.0.14-seed-users-data" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="users"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM users</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert initial users data with Oracle-specific values.
+            Uses Oracle date functions and sequences.
+        </comment>
+        
+        <insert tableName="users">
+            <column name="username" value="admin"/>
+            <column name="email" value="admin@liquibase-oracle-lab.com"/>
+            <column name="password_hash" value="$2a$10$8.UnVuG9HHgffUDAlk8qfO5LMZP/WPw0qXF/HBg.PY3mH.6nfbN6G"/>
+            <column name="first_name" value="System"/>
+            <column name="last_name" value="Administrator"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="john_doe"/>
+            <column name="email" value="john.doe@example.com"/>
+            <column name="password_hash" value="$2a$10$Q7xF8sTtLHgC7zqQNQ2g8.nUAMrF8yU3HhhLTt5GG1yQRR3U3OZ1y"/>
+            <column name="first_name" value="John"/>
+            <column name="last_name" value="Doe"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="jane_smith"/>
+            <column name="email" value="jane.smith@example.com"/>
+            <column name="password_hash" value="$2a$10$V7bNYqXCqZXVlGP7fPjGe.rXLJ8JVlHfE1RJvY8pKtS4jW9uC6kE6"/>
+            <column name="first_name" value="Jane"/>
+            <column name="last_name" value="Smith"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="bob_johnson"/>
+            <column name="email" value="bob.johnson@example.com"/>
+            <column name="password_hash" value="$2a$10$M4gRvYuVtC8nL4rH3zQp9uWxNpG6KjU8YtF2vA7cD5eB9iX3sQ1a"/>
+            <column name="first_name" value="Bob"/>
+            <column name="last_name" value="Johnson"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="test_inactive"/>
+            <column name="email" value="inactive@example.com"/>
+            <column name="password_hash" value="$2a$10$disabled_user_hash_placeholder_value_here"/>
+            <column name="first_name" value="Inactive"/>
+            <column name="last_name" value="User"/>
+            <column name="is_active" valueNumeric="0"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="users">
+                <where>username IN ('admin', 'john_doe', 'jane_smith', 'bob_johnson', 'test_inactive')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.15-seed-products-data" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="products"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM products</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert initial products data demonstrating Oracle data types.
+            Uses CLOB for descriptions and Oracle number formats.
+        </comment>
+        
+        <insert tableName="products">
+            <column name="name" value="Oracle Database Enterprise Edition"/>
+            <column name="description" value="Professional-grade relational database management system with advanced features including partitioning, advanced security, in-memory processing, and comprehensive management tools. Perfect for enterprise-level applications requiring high performance, availability, and scalability."/>
+            <column name="sku" value="ORACLE-DB-ENT-001"/>
+            <column name="price" valueNumeric="47500.00"/>
+            <column name="cost" valueNumeric="35000.00"/>
+            <column name="quantity_available" valueNumeric="10"/>
+            <column name="category" value="Database Software"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Oracle Cloud Infrastructure Credits"/>
+            <column name="description" value="Cloud computing credits for Oracle Cloud Infrastructure services including compute, storage, networking, and database services. Provides access to enterprise-grade cloud infrastructure with global availability and comprehensive security features."/>
+            <column name="sku" value="OCI-CREDITS-1000"/>
+            <column name="price" valueNumeric="1000.00"/>
+            <column name="cost" valueNumeric="750.00"/>
+            <column name="quantity_available" valueNumeric="500"/>
+            <column name="category" value="Cloud Services"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Oracle Linux Support"/>
+            <column name="description" value="Enterprise-grade support for Oracle Linux operating system including 24/7 technical support, security updates, performance optimization, and compatibility assurance with Oracle database and middleware products."/>
+            <column name="sku" value="OL-SUPPORT-PREM"/>
+            <column name="price" valueNumeric="1200.00"/>
+            <column name="cost" valueNumeric="600.00"/>
+            <column name="quantity_available" valueNumeric="100"/>
+            <column name="category" value="Support Services"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Oracle Java SE Subscription"/>
+            <column name="description" value="Commercial license and support for Oracle Java SE including security updates, bug fixes, and technical support for enterprise Java applications. Ensures compliance and access to latest Java features and optimizations."/>
+            <column name="sku" value="JAVA-SE-SUB-001"/>
+            <column name="price" valueNumeric="300.00"/>
+            <column name="cost" valueNumeric="150.00"/>
+            <column name="quantity_available" valueNumeric="200"/>
+            <column name="category" value="Development Tools"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Oracle WebLogic Server"/>
+            <column name="description" value="Enterprise Java application server providing a robust, mature, and scalable platform for developing and deploying Java EE applications. Includes clustering, high availability, and comprehensive management capabilities."/>
+            <column name="sku" value="WLS-STD-2023"/>
+            <column name="price" valueNumeric="8500.00"/>
+            <column name="cost" valueNumeric="5500.00"/>
+            <column name="quantity_available" valueNumeric="25"/>
+            <column name="category" value="Middleware"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Oracle APEX Development Platform"/>
+            <column name="description" value="Low-code application development platform that enables rapid development of scalable, secure enterprise apps with world-class features. Build responsive web applications quickly with minimal coding required."/>
+            <column name="sku" value="APEX-DEV-001"/>
+            <column name="price" valueNumeric="2400.00"/>
+            <column name="cost" valueNumeric="1200.00"/>
+            <column name="quantity_available" valueNumeric="50"/>
+            <column name="category" value="Development Tools"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Oracle Analytics Cloud"/>
+            <column name="description" value="Comprehensive cloud analytics platform providing self-service analytics, enterprise reporting, advanced analytics, and machine learning capabilities. Enables organizations to make data-driven decisions with intuitive visualizations and insights."/>
+            <column name="sku" value="OAC-ENT-001"/>
+            <column name="price" valueNumeric="6000.00"/>
+            <column name="cost" valueNumeric="4000.00"/>
+            <column name="quantity_available" valueNumeric="15"/>
+            <column name="category" value="Analytics"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Legacy Oracle Forms License"/>
+            <column name="description" value="Legacy product maintained for existing customers only. Oracle Forms development tool for creating enterprise applications with rich user interfaces. This product is no longer actively sold to new customers."/>
+            <column name="sku" value="FORMS-LEGACY-001"/>
+            <column name="price" valueNumeric="3500.00"/>
+            <column name="cost" valueNumeric="2500.00"/>
+            <column name="quantity_available" valueNumeric="5"/>
+            <column name="category" value="Legacy Products"/>
+            <column name="is_active" valueNumeric="0"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="products">
+                <where>sku LIKE 'ORACLE-%' OR sku LIKE 'OCI-%' OR sku LIKE 'OL-%' OR sku LIKE 'JAVA-%' OR sku LIKE 'WLS-%' OR sku LIKE 'APEX-%' OR sku LIKE 'OAC-%' OR sku LIKE 'FORMS-%'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.16-load-additional-products-from-csv" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="products"/>
+        </preConditions>
+        <comment>
+            Load additional product data from CSV file.
+            Demonstrates Oracle bulk data loading capabilities.
+        </comment>
+        
+        <loadData tableName="products" file="data/additional-products.csv" relativeToChangelogFile="true">
+            <column name="name" type="STRING"/>
+            <column name="description" type="CLOB"/>
+            <column name="sku" type="STRING"/>
+            <column name="price" type="NUMERIC"/>
+            <column name="cost" type="NUMERIC"/>
+            <column name="quantity_available" type="NUMERIC"/>
+            <column name="category" type="STRING"/>
+            <column name="is_active" type="NUMERIC"/>
+        </loadData>
+        
+        <rollback>
+            <delete tableName="products">
+                <where>sku LIKE 'CSV-%'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.17-seed-orders-data" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="orders"/>
+            <tableExists tableName="users"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM orders</sqlCheck>
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM users WHERE username = 'john_doe'</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert sample orders data demonstrating Oracle foreign key relationships.
+            Uses Oracle date functions and status values.
+        </comment>
+        
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'john_doe')"/>
+            <column name="order_number" value="ORD-2024-001"/>
+            <column name="status" value="DELIVERED"/>
+            <column name="total_amount" valueNumeric="48500.00"/>
+            <column name="tax_amount" valueNumeric="3880.00"/>
+            <column name="shipping_amount" valueNumeric="0.00"/>
+            <column name="order_date" valueComputed="CURRENT_TIMESTAMP - INTERVAL '30' DAY"/>
+            <column name="shipped_date" valueComputed="CURRENT_TIMESTAMP - INTERVAL '28' DAY"/>
+            <column name="delivered_date" valueComputed="CURRENT_TIMESTAMP - INTERVAL '25' DAY"/>
+        </insert>
+        
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'jane_smith')"/>
+            <column name="order_number" value="ORD-2024-002"/>
+            <column name="status" value="SHIPPED"/>
+            <column name="total_amount" valueNumeric="7200.00"/>
+            <column name="tax_amount" valueNumeric="576.00"/>
+            <column name="shipping_amount" valueNumeric="150.00"/>
+            <column name="order_date" valueComputed="CURRENT_TIMESTAMP - INTERVAL '15' DAY"/>
+            <column name="shipped_date" valueComputed="CURRENT_TIMESTAMP - INTERVAL '12' DAY"/>
+        </insert>
+        
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'bob_johnson')"/>
+            <column name="order_number" value="ORD-2024-003"/>
+            <column name="status" value="PROCESSING"/>
+            <column name="total_amount" valueNumeric="1500.00"/>
+            <column name="tax_amount" valueNumeric="120.00"/>
+            <column name="shipping_amount" valueNumeric="25.00"/>
+            <column name="order_date" valueComputed="CURRENT_TIMESTAMP - INTERVAL '7' DAY"/>
+        </insert>
+        
+        <insert tableName="orders">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'john_doe')"/>
+            <column name="order_number" value="ORD-2024-004"/>
+            <column name="status" value="PENDING"/>
+            <column name="total_amount" valueNumeric="2400.00"/>
+            <column name="tax_amount" valueNumeric="192.00"/>
+            <column name="shipping_amount" valueNumeric="50.00"/>
+            <column name="order_date" valueComputed="CURRENT_TIMESTAMP - INTERVAL '2' DAY"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="orders">
+                <where>order_number LIKE 'ORD-2024-%'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.18-seed-order-items-data" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="order_items"/>
+            <tableExists tableName="orders"/>
+            <tableExists tableName="products"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM order_items</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert sample order items data demonstrating Oracle junction table relationships.
+            Uses Oracle subqueries and calculated values.
+        </comment>
+        
+        <!-- Order 1 items (John's delivered order) -->
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-001')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'ORACLE-DB-ENT-001')"/>
+            <column name="quantity" valueNumeric="1"/>
+            <column name="unit_price" valueNumeric="47500.00"/>
+        </insert>
+        
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-001')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'OCI-CREDITS-1000')"/>
+            <column name="quantity" valueNumeric="1"/>
+            <column name="unit_price" valueNumeric="1000.00"/>
+        </insert>
+        
+        <!-- Order 2 items (Jane's shipped order) -->
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-002')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'OAC-ENT-001')"/>
+            <column name="quantity" valueNumeric="1"/>
+            <column name="unit_price" valueNumeric="6000.00"/>
+        </insert>
+        
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-002')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'OL-SUPPORT-PREM')"/>
+            <column name="quantity" valueNumeric="1"/>
+            <column name="unit_price" valueNumeric="1200.00"/>
+        </insert>
+        
+        <!-- Order 3 items (Bob's processing order) -->
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-003')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'JAVA-SE-SUB-001')"/>
+            <column name="quantity" valueNumeric="5"/>
+            <column name="unit_price" valueNumeric="300.00"/>
+        </insert>
+        
+        <!-- Order 4 items (John's pending order) -->
+        <insert tableName="order_items">
+            <column name="order_id" valueComputed="(SELECT id FROM orders WHERE order_number = 'ORD-2024-004')"/>
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'APEX-DEV-001')"/>
+            <column name="quantity" valueNumeric="1"/>
+            <column name="unit_price" valueNumeric="2400.00"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="order_items">
+                <where>order_id IN (SELECT id FROM orders WHERE order_number LIKE 'ORD-2024-%')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

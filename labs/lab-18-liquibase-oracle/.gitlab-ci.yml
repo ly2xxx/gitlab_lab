@@ -1,0 +1,488 @@
+stages:
+  - validate
+  - test
+  - deploy-dev
+  - deploy-test
+  - deploy-prod
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  # Oracle Database Configuration
+  ORACLE_PASSWORD: oracle_password
+  ORACLE_DATABASE: XEPDB1
+  ORACLE_USER: liquibase
+  ORACLE_USER_PASSWORD: liquibase_password
+  APP_USER: app_user
+  APP_USER_PASSWORD: app_password
+
+# Global services for Oracle database
+services:
+  - name: gvenzl/oracle-xe:21c-slim
+    alias: oracle
+    variables:
+      ORACLE_RANDOM_PASSWORD: "false"
+      ORACLE_PASSWORD: $ORACLE_PASSWORD
+      ORACLE_DATABASE: $ORACLE_DATABASE
+      ORACLE_USER: $ORACLE_USER
+      ORACLE_USER_PASSWORD: $ORACLE_USER_PASSWORD
+      APP_USER: $APP_USER
+      APP_USER_PASSWORD: $APP_USER_PASSWORD
+
+before_script:
+  - echo "Setting up Oracle Liquibase environment..."
+  - apk add --no-cache bash curl unzip
+  - |
+    # Wait for Oracle to be ready - Oracle takes longer than MySQL
+    echo "Waiting for Oracle database to be ready..."
+    timeout=300
+    while ! sqlplus -S $ORACLE_USER/$ORACLE_USER_PASSWORD@oracle:1521/$ORACLE_DATABASE <<< "SELECT 1 FROM DUAL;" 2>/dev/null && [ $timeout -gt 0 ]; do
+      echo "Waiting for Oracle to be ready... ($timeout seconds remaining)"
+      sleep 5
+      timeout=$((timeout-5))
+    done
+    if [ $timeout -le 0 ]; then
+      echo "Oracle did not become ready in time"
+      exit 1
+    fi
+  - echo "Oracle is ready!"
+
+# Job Templates
+.liquibase_job_template: &liquibase_job_definition
+  image: liquibase/liquibase:4.29.2
+  variables:
+    LIQUIBASE_COMMAND_URL: jdbc:oracle:thin:@oracle:1521:$ORACLE_DATABASE
+    LIQUIBASE_COMMAND_USERNAME: $ORACLE_USER
+    LIQUIBASE_COMMAND_PASSWORD: $ORACLE_USER_PASSWORD
+  before_script:
+    - echo "Setting up Liquibase with Oracle JDBC driver..."
+    - apk add --no-cache curl
+    # Download Oracle JDBC driver
+    - curl -L -o /liquibase/lib/ojdbc11.jar https://repo1.maven.org/maven2/com/oracle/database/jdbc/ojdbc11/23.3.0.23.09/ojdbc11-23.3.0.23.09.jar
+    - curl -L -o /liquibase/lib/oraclepki.jar https://repo1.maven.org/maven2/com/oracle/database/security/oraclepki/23.3.0.23.09/oraclepki-23.3.0.23.09.jar
+    - curl -L -o /liquibase/lib/osdt_core.jar https://repo1.maven.org/maven2/com/oracle/database/security/osdt_core/23.3.0.23.09/osdt_core-23.3.0.23.09.jar
+    - curl -L -o /liquibase/lib/osdt_cert.jar https://repo1.maven.org/maven2/com/oracle/database/security/osdt_cert/23.3.0.23.09/osdt_cert-23.3.0.23.09.jar
+    - chmod 644 /liquibase/lib/*.jar
+    - |
+      # Wait for Oracle to be ready
+      timeout=180
+      while ! nc -z oracle 1521 && [ $timeout -gt 0 ]; do
+        echo "Waiting for Oracle to be ready... ($timeout seconds remaining)"
+        sleep 3
+        timeout=$((timeout-3))
+      done
+      if [ $timeout -le 0 ]; then
+        echo "Oracle did not become ready in time"
+        exit 1
+      fi
+    - echo "Oracle connection verified!"
+
+# Validation Stage
+liquibase_validate:
+  <<: *liquibase_job_definition
+  stage: validate
+  script:
+    - echo "Validating Liquibase changelog syntax for Oracle..."
+    - cd labs/lab-18-liquibase-oracle
+    - liquibase --defaults-file=liquibase.properties validate
+    - echo "Oracle changelog validation passed!"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/lab-18-liquibase-oracle/
+
+# Test Stage
+liquibase_test_status:
+  <<: *liquibase_job_definition
+  stage: test
+  script:
+    - echo "Checking Liquibase status on Oracle without applying changes..."
+    - cd labs/lab-18-liquibase-oracle
+    - liquibase --defaults-file=liquibase.properties status --verbose
+    - echo "Oracle status check completed successfully!"
+  artifacts:
+    reports:
+      junit: labs/lab-18-liquibase-oracle/reports/liquibase-status.xml
+    paths:
+      - labs/lab-18-liquibase-oracle/reports/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/lab-18-liquibase-oracle/
+
+liquibase_test_update_sql:
+  <<: *liquibase_job_definition
+  stage: test
+  script:
+    - echo "Generating SQL for pending Oracle changes..."
+    - cd labs/lab-18-liquibase-oracle
+    - mkdir -p reports
+    - liquibase --defaults-file=liquibase.properties update-sql > reports/oracle-update-sql-output.sql
+    - echo "Generated Oracle SQL:"
+    - head -50 reports/oracle-update-sql-output.sql
+    - echo "SQL generation completed!"
+  artifacts:
+    paths:
+      - labs/lab-18-liquibase-oracle/reports/oracle-update-sql-output.sql
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/lab-18-liquibase-oracle/
+
+oracle_connection_test:
+  <<: *liquibase_job_definition
+  stage: test
+  script:
+    - echo "Testing Oracle database connectivity and features..."
+    - cd labs/lab-18-liquibase-oracle
+    - |
+      # Test basic Oracle connectivity
+      echo "Testing Oracle SQL*Plus connection..."
+      sqlplus -S $ORACLE_USER/$ORACLE_USER_PASSWORD@oracle:1521/$ORACLE_DATABASE <<EOF
+      SELECT 'Oracle Database Version: ' || banner as info FROM v\$version WHERE banner LIKE 'Oracle%';
+      SELECT 'Current Schema: ' || USER as schema_info FROM DUAL;
+      SELECT 'Current Time: ' || TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') as time_info FROM DUAL;
+      EOF
+    - echo "Oracle connectivity test passed!"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/lab-18-liquibase-oracle/
+
+# Development Environment Deployment
+deploy_to_development:
+  <<: *liquibase_job_definition
+  stage: deploy-dev
+  environment:
+    name: development
+    url: http://oracle:1521
+  variables:
+    LIQUIBASE_COMMAND_CONTEXTS: development
+  script:
+    - echo "Deploying to Oracle Development environment..."
+    - cd labs/lab-18-liquibase-oracle
+    - mkdir -p reports
+    
+    # Run update with development context
+    - liquibase --defaults-file=liquibase.properties update
+    
+    # Generate deployment report
+    - liquibase --defaults-file=liquibase.properties history > reports/dev-deployment-history.txt
+    
+    # Verify deployment with Oracle-specific queries
+    - |
+      sqlplus -S $ORACLE_USER/$ORACLE_USER_PASSWORD@oracle:1521/$ORACLE_DATABASE <<EOF
+      SELECT 'Tables created: ' || COUNT(*) as table_count FROM user_tables;
+      SELECT 'Sequences created: ' || COUNT(*) as seq_count FROM user_sequences;
+      SELECT 'Triggers created: ' || COUNT(*) as trigger_count FROM user_triggers;
+      SELECT 'Procedures created: ' || COUNT(*) as proc_count FROM user_procedures WHERE object_type = 'PROCEDURE';
+      SELECT 'Packages created: ' || COUNT(*) as pkg_count FROM user_objects WHERE object_type = 'PACKAGE';
+      EOF
+    
+    - liquibase --defaults-file=liquibase.properties status --verbose
+    
+    - echo "Oracle Development deployment completed successfully!"
+  artifacts:
+    paths:
+      - labs/lab-18-liquibase-oracle/reports/dev-deployment-history.txt
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/lab-18-liquibase-oracle/
+      when: manual
+  allow_failure: false
+
+# Test Environment Deployment  
+deploy_to_test:
+  <<: *liquibase_job_definition
+  stage: deploy-test
+  environment:
+    name: test
+    url: http://oracle:1521
+  variables:
+    LIQUIBASE_COMMAND_CONTEXTS: test
+    ORACLE_TEST_USER: liquibase_test
+    ORACLE_TEST_PASSWORD: liquibase_test_password
+  script:
+    - echo "Deploying to Oracle Test environment..."
+    - cd labs/lab-18-liquibase-oracle
+    - mkdir -p reports
+    
+    # Create test user and grant permissions
+    - |
+      sqlplus -S $ORACLE_USER/$ORACLE_USER_PASSWORD@oracle:1521/$ORACLE_DATABASE <<EOF
+      CREATE USER $ORACLE_TEST_USER IDENTIFIED BY $ORACLE_TEST_PASSWORD
+      DEFAULT TABLESPACE USERS
+      TEMPORARY TABLESPACE TEMP
+      QUOTA UNLIMITED ON USERS;
+      
+      GRANT CONNECT, RESOURCE TO $ORACLE_TEST_USER;
+      GRANT CREATE SESSION TO $ORACLE_TEST_USER;
+      GRANT CREATE TABLE TO $ORACLE_TEST_USER;
+      GRANT CREATE VIEW TO $ORACLE_TEST_USER;
+      GRANT CREATE SEQUENCE TO $ORACLE_TEST_USER;
+      GRANT CREATE PROCEDURE TO $ORACLE_TEST_USER;
+      GRANT CREATE TRIGGER TO $ORACLE_TEST_USER;
+      EOF
+    
+    # Update connection URL for test user
+    - export LIQUIBASE_COMMAND_URL=jdbc:oracle:thin:@oracle:1521:$ORACLE_DATABASE
+    - export LIQUIBASE_COMMAND_USERNAME=$ORACLE_TEST_USER
+    - export LIQUIBASE_COMMAND_PASSWORD=$ORACLE_TEST_PASSWORD
+    
+    # Run update with test context
+    - liquibase --defaults-file=liquibase.properties update
+    
+    # Run Oracle-specific test validation procedures
+    - |
+      sqlplus -S $ORACLE_TEST_USER/$ORACLE_TEST_PASSWORD@oracle:1521/$ORACLE_DATABASE <<EOF
+      SET SERVEROUTPUT ON SIZE 1000000;
+      EXEC create_standard_test_dataset();
+      EXEC create_edge_case_test_data();
+      EXEC validate_test_data_integrity();
+      EOF
+    
+    # Generate test deployment report
+    - liquibase --defaults-file=liquibase.properties history > reports/test-deployment-history.txt
+    
+    - echo "Oracle Test deployment completed successfully!"
+  artifacts:
+    paths:
+      - labs/lab-18-liquibase-oracle/reports/test-deployment-history.txt
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  dependencies:
+    - deploy_to_development
+  allow_failure: false
+
+# Production-like Environment (Simulated)
+deploy_to_production:
+  <<: *liquibase_job_definition
+  stage: deploy-prod
+  environment:
+    name: production
+    url: http://oracle:1521
+  variables:
+    LIQUIBASE_COMMAND_CONTEXTS: production
+    ORACLE_PROD_USER: liquibase_prod
+    ORACLE_PROD_PASSWORD: liquibase_prod_password
+  script:
+    - echo "Deploying to Oracle Production environment (simulated)..."
+    - cd labs/lab-18-liquibase-oracle
+    - mkdir -p reports
+    
+    # Create production user with restricted privileges
+    - |
+      sqlplus -S $ORACLE_USER/$ORACLE_USER_PASSWORD@oracle:1521/$ORACLE_DATABASE <<EOF
+      CREATE USER $ORACLE_PROD_USER IDENTIFIED BY $ORACLE_PROD_PASSWORD
+      DEFAULT TABLESPACE USERS
+      TEMPORARY TABLESPACE TEMP
+      QUOTA UNLIMITED ON USERS;
+      
+      GRANT CONNECT, RESOURCE TO $ORACLE_PROD_USER;
+      GRANT CREATE SESSION TO $ORACLE_PROD_USER;
+      GRANT CREATE TABLE TO $ORACLE_PROD_USER;
+      GRANT CREATE VIEW TO $ORACLE_PROD_USER;
+      GRANT CREATE SEQUENCE TO $ORACLE_PROD_USER;
+      GRANT CREATE PROCEDURE TO $ORACLE_PROD_USER;
+      GRANT CREATE TRIGGER TO $ORACLE_PROD_USER;
+      GRANT CREATE MATERIALIZED VIEW TO $ORACLE_PROD_USER;
+      EOF
+    
+    # Update connection for production user
+    - export LIQUIBASE_COMMAND_URL=jdbc:oracle:thin:@oracle:1521:$ORACLE_DATABASE
+    - export LIQUIBASE_COMMAND_USERNAME=$ORACLE_PROD_USER
+    - export LIQUIBASE_COMMAND_PASSWORD=$ORACLE_PROD_PASSWORD
+    
+    # Production deployment should be more cautious
+    - echo "Performing pre-deployment validation..."
+    - liquibase --defaults-file=liquibase.properties validate
+    - liquibase --defaults-file=liquibase.properties status --verbose
+    
+    # Generate rollback SQL as safety measure
+    - liquibase --defaults-file=liquibase.properties rollback-count-sql 10 > reports/oracle-rollback-safety-plan.sql
+    
+    # Apply changes (excluding development/test specific contexts)
+    - liquibase --defaults-file=liquibase.properties --contexts="!development,!test" update
+    
+    # Generate production deployment report
+    - liquibase --defaults-file=liquibase.properties history > reports/prod-deployment-history.txt
+    
+    # Post-deployment validation with Oracle-specific queries
+    - |
+      sqlplus -S $ORACLE_PROD_USER/$ORACLE_PROD_PASSWORD@oracle:1521/$ORACLE_DATABASE <<EOF
+      SELECT 'Tables in production: ' || COUNT(*) as table_count FROM user_tables;
+      SELECT 'Indexes created: ' || COUNT(*) as index_count FROM user_indexes;
+      SELECT 'Constraints active: ' || COUNT(*) as constraint_count FROM user_constraints WHERE status = 'ENABLED';
+      SELECT 'Materialized views: ' || COUNT(*) as mv_count FROM user_mviews;
+      EOF
+    
+    - echo "Oracle Production deployment completed successfully!"
+  artifacts:
+    paths:
+      - labs/lab-18-liquibase-oracle/reports/prod-deployment-history.txt
+      - labs/lab-18-liquibase-oracle/reports/oracle-rollback-safety-plan.sql
+    expire_in: 4 weeks
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  dependencies:
+    - deploy_to_test
+  allow_failure: false
+
+# Oracle-specific Test Suite Execution
+oracle_test_suite:
+  <<: *liquibase_job_definition
+  stage: deploy-test
+  script:
+    - echo "Running Oracle-specific test suite..."
+    - cd labs/lab-18-liquibase-oracle
+    
+    # Apply all changes first
+    - liquibase --defaults-file=liquibase.properties update --contexts=test
+    
+    # Execute Oracle test procedures
+    - |
+      sqlplus -S $ORACLE_USER/$ORACLE_USER_PASSWORD@oracle:1521/$ORACLE_DATABASE <<EOF
+      SET SERVEROUTPUT ON SIZE 1000000;
+      EXEC create_standard_test_dataset();
+      EXEC run_test_suite();
+      EOF
+    
+    - echo "Oracle test suite completed successfully!"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+    - if: $CI_COMMIT_BRANCH =~ /^feature\/lab-18-liquibase-oracle/
+      when: manual
+  allow_failure: true
+
+# Performance Benchmarks
+oracle_performance_benchmarks:
+  <<: *liquibase_job_definition
+  stage: deploy-test
+  script:
+    - echo "Running Oracle performance benchmarks..."
+    - cd labs/lab-18-liquibase-oracle
+    
+    # Apply all changes and create test data
+    - liquibase --defaults-file=liquibase.properties update --contexts=test
+    
+    # Run performance benchmarks
+    - |
+      sqlplus -S $ORACLE_USER/$ORACLE_USER_PASSWORD@oracle:1521/$ORACLE_DATABASE <<EOF
+      SET SERVEROUTPUT ON SIZE 1000000;
+      EXEC create_standard_test_dataset();
+      EXEC benchmark_user_queries();
+      EXEC benchmark_product_queries();
+      EOF
+    
+    - echo "Oracle performance benchmarks completed!"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  allow_failure: true
+
+# Rollback Jobs (Manual)
+rollback_development:
+  <<: *liquibase_job_definition
+  stage: deploy-dev
+  environment:
+    name: development
+  variables:
+    LIQUIBASE_COMMAND_CONTEXTS: development
+  script:
+    - echo "Rolling back Oracle Development environment..."
+    - cd labs/lab-18-liquibase-oracle
+    - |
+      if [ -z "$ROLLBACK_COUNT" ]; then
+        export ROLLBACK_COUNT=1
+      fi
+    - echo "Rolling back $ROLLBACK_COUNT changesets..."
+    - liquibase --defaults-file=liquibase.properties rollback-count $ROLLBACK_COUNT
+    - liquibase --defaults-file=liquibase.properties history
+    - echo "Oracle Development rollback completed!"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  allow_failure: true
+
+rollback_test:
+  <<: *liquibase_job_definition
+  stage: deploy-test
+  environment:
+    name: test
+  variables:
+    LIQUIBASE_COMMAND_CONTEXTS: test
+    LIQUIBASE_COMMAND_URL: jdbc:oracle:thin:@oracle:1521:$ORACLE_DATABASE
+  script:
+    - echo "Rolling back Oracle Test environment..."
+    - cd labs/lab-18-liquibase-oracle
+    - |
+      if [ -z "$ROLLBACK_COUNT" ]; then
+        export ROLLBACK_COUNT=1
+      fi
+    - echo "Rolling back $ROLLBACK_COUNT changesets..."
+    - liquibase --defaults-file=liquibase.properties rollback-count $ROLLBACK_COUNT
+    - liquibase --defaults-file=liquibase.properties history
+    - echo "Oracle Test rollback completed!"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+  allow_failure: true
+
+# Oracle Database Documentation Generation
+generate_oracle_database_docs:
+  <<: *liquibase_job_definition
+  stage: test
+  script:
+    - echo "Generating Oracle database documentation..."
+    - cd labs/lab-18-liquibase-oracle
+    - mkdir -p reports/docs
+    
+    # Apply changes to get current schema
+    - liquibase --defaults-file=liquibase.properties update
+    
+    # Generate various documentation outputs
+    - liquibase --defaults-file=liquibase.properties history > reports/docs/changelog-history.txt
+    - liquibase --defaults-file=liquibase.properties status --verbose > reports/docs/current-status.txt
+    
+    # Export Oracle-specific schema structure
+    - |
+      sqlplus -S $ORACLE_USER/$ORACLE_USER_PASSWORD@oracle:1521/$ORACLE_DATABASE <<EOF > reports/docs/oracle-schema-structure.txt
+      SET PAGESIZE 1000
+      SET LINESIZE 200
+      
+      SELECT 'TABLE SUMMARY' as section FROM DUAL;
+      SELECT table_name, num_rows, tablespace_name FROM user_tables ORDER BY table_name;
+      
+      SELECT 'SEQUENCE SUMMARY' as section FROM DUAL;
+      SELECT sequence_name, min_value, max_value, increment_by, last_number FROM user_sequences ORDER BY sequence_name;
+      
+      SELECT 'INDEX SUMMARY' as section FROM DUAL;
+      SELECT index_name, table_name, uniqueness FROM user_indexes ORDER BY table_name, index_name;
+      
+      SELECT 'CONSTRAINT SUMMARY' as section FROM DUAL;
+      SELECT constraint_name, constraint_type, table_name, status FROM user_constraints ORDER BY table_name, constraint_name;
+      
+      SELECT 'TRIGGER SUMMARY' as section FROM DUAL;
+      SELECT trigger_name, table_name, triggering_event, status FROM user_triggers ORDER BY table_name, trigger_name;
+      
+      SELECT 'PROCEDURE/FUNCTION SUMMARY' as section FROM DUAL;
+      SELECT object_name, object_type, status FROM user_objects WHERE object_type IN ('PROCEDURE', 'FUNCTION', 'PACKAGE') ORDER BY object_type, object_name;
+      EOF
+    
+    - echo "Oracle database documentation generated successfully!"
+  artifacts:
+    paths:
+      - labs/lab-18-liquibase-oracle/reports/docs/
+    expire_in: 4 weeks
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Development Environment Specific Changes for Oracle Database -->
+    
+    <changeSet id="dev-1.0-create-dev-test-data" author="liquibase-oracle-lab" dbms="oracle" context="development">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="users"/>
+            <tableExists tableName="products"/>
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM users WHERE username = 'admin'</sqlCheck>
+        </preConditions>
+        <comment>
+            Insert additional test data for development environment.
+            Includes test users, sample orders, and development-specific configurations.
+        </comment>
+        
+        <!-- Development test users -->
+        <insert tableName="users">
+            <column name="username" value="dev_tester"/>
+            <column name="email" value="dev.tester@oracle-lab-dev.com"/>
+            <column name="password_hash" value="$2a$10$DEV.TEST.HASH.PLACEHOLDER.VALUE"/>
+            <column name="first_name" value="Dev"/>
+            <column name="last_name" value="Tester"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="qa_user"/>
+            <column name="email" value="qa.user@oracle-lab-dev.com"/>
+            <column name="password_hash" value="$2a$10$QA.TEST.HASH.PLACEHOLDER.VALUE"/>
+            <column name="first_name" value="QA"/>
+            <column name="last_name" value="User"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <!-- Development test products -->
+        <insert tableName="products">
+            <column name="name" value="Oracle Dev License (Test)"/>
+            <column name="description" value="Development test license for Oracle products. This is test data for development environment only."/>
+            <column name="sku" value="DEV-ORACLE-001"/>
+            <column name="price" valueNumeric="1.00"/>
+            <column name="cost" valueNumeric="0.50"/>
+            <column name="quantity_available" valueNumeric="999"/>
+            <column name="category" value="Development Tools"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Test Product Alpha"/>
+            <column name="description" value="Alpha test product for development testing scenarios."/>
+            <column name="sku" value="TEST-ALPHA-001"/>
+            <column name="price" valueNumeric="10.00"/>
+            <column name="cost" valueNumeric="5.00"/>
+            <column name="quantity_available" valueNumeric="100"/>
+            <column name="category" value="Test Products"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="users">
+                <where>username IN ('dev_tester', 'qa_user')</where>
+            </delete>
+            <delete tableName="products">
+                <where>sku LIKE 'DEV-%' OR sku LIKE 'TEST-%'</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="dev-1.1-create-debug-logging-table" author="liquibase-oracle-lab" dbms="oracle" context="development">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="debug_log"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create debug logging table for development environment debugging.
+            This table is only created in development context.
+        </comment>
+        
+        <createSequence sequenceName="debug_log_seq" startValue="1" incrementBy="1"/>
+        
+        <createTable tableName="debug_log">
+            <column name="id" type="NUMBER(19,0)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="log_level" type="VARCHAR2(10)" defaultValue="INFO">
+                <constraints nullable="false"/>
+            </column>
+            <column name="logger_name" type="VARCHAR2(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="CLOB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="exception_trace" type="CLOB"/>
+            <column name="user_id" type="NUMBER(19,0)"/>
+            <column name="session_id" type="VARCHAR2(100)"/>
+            <column name="ip_address" type="VARCHAR2(45)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <sql>
+            CREATE OR REPLACE TRIGGER debug_log_bi_trg
+            BEFORE INSERT ON debug_log
+            FOR EACH ROW
+            BEGIN
+                IF :NEW.id IS NULL THEN
+                    :NEW.id := debug_log_seq.NEXTVAL;
+                END IF;
+            END;
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER debug_log_bi_trg</sql>
+            <dropTable tableName="debug_log"/>
+            <dropSequence sequenceName="debug_log_seq"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="dev-1.2-create-development-procedures" author="liquibase-oracle-lab" dbms="oracle" context="development">
+        <comment>
+            Create development-specific procedures for testing and debugging.
+        </comment>
+        
+        <!-- Procedure to generate test orders -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE generate_test_orders(
+                p_count IN NUMBER DEFAULT 10
+            ) AS
+                v_user_id NUMBER;
+                v_product_id NUMBER;
+                v_order_id NUMBER;
+                v_order_number VARCHAR2(50);
+            BEGIN
+                FOR i IN 1..p_count LOOP
+                    -- Select random test user
+                    SELECT id INTO v_user_id
+                    FROM (
+                        SELECT id FROM users 
+                        WHERE username LIKE 'dev_%' OR username LIKE 'qa_%'
+                        ORDER BY DBMS_RANDOM.VALUE
+                    )
+                    WHERE ROWNUM = 1;
+                    
+                    -- Generate order number
+                    v_order_number := 'TEST-' || TO_CHAR(SYSDATE, 'YYYYMMDD') || '-' || 
+                                     LPAD(i, 4, '0');
+                    
+                    -- Create test order using package
+                    order_management.create_order(v_user_id, v_order_number, v_order_id);
+                    
+                    -- Add random test products
+                    FOR j IN 1..DBMS_RANDOM.VALUE(1, 3) LOOP
+                        SELECT id INTO v_product_id
+                        FROM (
+                            SELECT id FROM products 
+                            WHERE sku LIKE 'TEST-%' OR sku LIKE 'DEV-%'
+                            ORDER BY DBMS_RANDOM.VALUE
+                        )
+                        WHERE ROWNUM = 1;
+                        
+                        order_management.add_order_item(
+                            v_order_id, 
+                            v_product_id, 
+                            TRUNC(DBMS_RANDOM.VALUE(1, 5))
+                        );
+                    END LOOP;
+                END LOOP;
+                
+                COMMIT;
+                DBMS_OUTPUT.PUT_LINE('Generated ' || p_count || ' test orders');
+            END generate_test_orders;
+        </sql>
+        
+        <!-- Procedure to reset test data -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE reset_test_data AS
+            BEGIN
+                -- Delete test orders and related data
+                DELETE FROM order_items 
+                WHERE order_id IN (
+                    SELECT id FROM orders WHERE order_number LIKE 'TEST-%'
+                );
+                
+                DELETE FROM orders WHERE order_number LIKE 'TEST-%';
+                
+                -- Reset test product inventory
+                UPDATE products 
+                SET quantity_available = 999
+                WHERE sku LIKE 'TEST-%' OR sku LIKE 'DEV-%';
+                
+                -- Clear debug logs
+                DELETE FROM debug_log;
+                
+                COMMIT;
+                DBMS_OUTPUT.PUT_LINE('Test data reset completed');
+            END reset_test_data;
+        </sql>
+        
+        <!-- Function to log debug messages -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE log_debug(
+                p_level IN VARCHAR2 DEFAULT 'INFO',
+                p_logger IN VARCHAR2 DEFAULT 'SYSTEM',
+                p_message IN VARCHAR2,
+                p_user_id IN NUMBER DEFAULT NULL
+            ) AS
+            BEGIN
+                INSERT INTO debug_log (log_level, logger_name, message, user_id)
+                VALUES (p_level, p_logger, p_message, p_user_id);
+            END log_debug;
+        </sql>
+        
+        <rollback>
+            <sql>DROP PROCEDURE generate_test_orders</sql>
+            <sql>DROP PROCEDURE reset_test_data</sql>
+            <sql>DROP PROCEDURE log_debug</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="dev-1.3-create-development-views" author="liquibase-oracle-lab" dbms="oracle" context="development">
+        <comment>
+            Create development-specific views for testing and monitoring.
+        </comment>
+        
+        <!-- View for test data monitoring -->
+        <sql>
+            CREATE OR REPLACE VIEW v_test_data_summary AS
+            SELECT 
+                'Users' AS entity_type,
+                COUNT(*) AS total_count,
+                SUM(CASE WHEN username LIKE 'dev_%' OR username LIKE 'qa_%' THEN 1 ELSE 0 END) AS test_count
+            FROM users
+            UNION ALL
+            SELECT 
+                'Products' AS entity_type,
+                COUNT(*) AS total_count,
+                SUM(CASE WHEN sku LIKE 'TEST-%' OR sku LIKE 'DEV-%' THEN 1 ELSE 0 END) AS test_count
+            FROM products
+            UNION ALL
+            SELECT 
+                'Orders' AS entity_type,
+                COUNT(*) AS total_count,
+                SUM(CASE WHEN order_number LIKE 'TEST-%' THEN 1 ELSE 0 END) AS test_count
+            FROM orders
+        </sql>
+        
+        <!-- View for debug log analysis -->
+        <sql>
+            CREATE OR REPLACE VIEW v_debug_log_summary AS
+            SELECT 
+                log_level,
+                logger_name,
+                COUNT(*) AS message_count,
+                MAX(created_at) AS latest_message,
+                MIN(created_at) AS earliest_message
+            FROM debug_log
+            GROUP BY log_level, logger_name
+            ORDER BY message_count DESC
+        </sql>
+        
+        <rollback>
+            <sql>DROP VIEW v_test_data_summary</sql>
+            <sql>DROP VIEW v_debug_log_summary</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="dev-1.4-create-performance-test-procedures" author="liquibase-oracle-lab" dbms="oracle" context="development">
+        <comment>
+            Create procedures for performance testing in development environment.
+        </comment>
+        
+        <!-- Procedure to generate load test data -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE generate_load_test_data(
+                p_users IN NUMBER DEFAULT 100,
+                p_products IN NUMBER DEFAULT 1000,
+                p_orders IN NUMBER DEFAULT 500
+            ) AS
+                v_user_id NUMBER;
+                v_product_id NUMBER;
+                v_order_id NUMBER;
+                v_start_time TIMESTAMP;
+            BEGIN
+                v_start_time := CURRENT_TIMESTAMP;
+                
+                log_debug('INFO', 'LOAD_TEST', 'Starting load test data generation');
+                
+                -- Generate test users
+                FOR i IN 1..p_users LOOP
+                    INSERT INTO users (username, email, password_hash, first_name, last_name)
+                    VALUES (
+                        'loadtest_user_' || i,
+                        'loadtest' || i || '@oracle-lab-dev.com',
+                        '$2a$10$LOAD.TEST.HASH.PLACEHOLDER',
+                        'Load',
+                        'User' || i
+                    );
+                    
+                    IF MOD(i, 100) = 0 THEN
+                        COMMIT;
+                        log_debug('INFO', 'LOAD_TEST', 'Generated ' || i || ' test users');
+                    END IF;
+                END LOOP;
+                
+                -- Generate test products
+                FOR i IN 1..p_products LOOP
+                    INSERT INTO products (name, description, sku, price, cost, quantity_available)
+                    VALUES (
+                        'Load Test Product ' || i,
+                        'Generated product for load testing purposes',
+                        'LOAD-TEST-' || LPAD(i, 6, '0'),
+                        ROUND(DBMS_RANDOM.VALUE(10, 1000), 2),
+                        ROUND(DBMS_RANDOM.VALUE(5, 500), 2),
+                        TRUNC(DBMS_RANDOM.VALUE(10, 1000))
+                    );
+                    
+                    IF MOD(i, 100) = 0 THEN
+                        COMMIT;
+                        log_debug('INFO', 'LOAD_TEST', 'Generated ' || i || ' test products');
+                    END IF;
+                END LOOP;
+                
+                COMMIT;
+                log_debug('INFO', 'LOAD_TEST', 
+                    'Load test data generation completed in ' || 
+                    EXTRACT(SECOND FROM (CURRENT_TIMESTAMP - v_start_time)) || ' seconds');
+            END generate_load_test_data;
+        </sql>
+        
+        <!-- Procedure to clean up load test data -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE cleanup_load_test_data AS
+            BEGIN
+                DELETE FROM order_items 
+                WHERE order_id IN (
+                    SELECT o.id FROM orders o
+                    JOIN users u ON o.user_id = u.id
+                    WHERE u.username LIKE 'loadtest_%'
+                );
+                
+                DELETE FROM orders 
+                WHERE user_id IN (
+                    SELECT id FROM users WHERE username LIKE 'loadtest_%'
+                );
+                
+                DELETE FROM products WHERE sku LIKE 'LOAD-TEST-%';
+                DELETE FROM users WHERE username LIKE 'loadtest_%';
+                DELETE FROM debug_log WHERE logger_name = 'LOAD_TEST';
+                
+                COMMIT;
+                
+                log_debug('INFO', 'CLEANUP', 'Load test data cleanup completed');
+            END cleanup_load_test_data;
+        </sql>
+        
+        <rollback>
+            <sql>DROP PROCEDURE generate_load_test_data</sql>
+            <sql>DROP PROCEDURE cleanup_load_test_data</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="dev-1.5-create-development-indexes" author="liquibase-oracle-lab" dbms="oracle" context="development">
+        <comment>
+            Create development-specific indexes for test data and debugging.
+        </comment>
+        
+        <createIndex tableName="debug_log" indexName="idx_debug_log_level_time">
+            <column name="log_level"/>
+            <column name="created_at" type="desc"/>
+        </createIndex>
+        
+        <createIndex tableName="debug_log" indexName="idx_debug_log_logger">
+            <column name="logger_name"/>
+        </createIndex>
+        
+        <!-- Partial indexes for test data -->
+        <sql>
+            CREATE INDEX idx_users_test_data 
+            ON users (username)
+            WHERE username LIKE 'dev_%' OR username LIKE 'qa_%' OR username LIKE 'loadtest_%'
+        </sql>
+        
+        <sql>
+            CREATE INDEX idx_products_test_data 
+            ON products (sku)
+            WHERE sku LIKE 'TEST-%' OR sku LIKE 'DEV-%' OR sku LIKE 'LOAD-TEST-%'
+        </sql>
+        
+        <rollback>
+            <dropIndex tableName="debug_log" indexName="idx_debug_log_level_time"/>
+            <dropIndex tableName="debug_log" indexName="idx_debug_log_logger"/>
+            <sql>DROP INDEX idx_users_test_data</sql>
+            <sql>DROP INDEX idx_products_test_data</sql>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

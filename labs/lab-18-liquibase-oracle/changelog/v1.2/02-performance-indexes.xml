@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Performance Optimization Indexes - Version 1.2 for Oracle Database -->
+    
+    <changeSet id="1.2.12-create-user-performance-indexes" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create performance-optimized indexes for user-related queries.
+            Includes composite indexes for common query patterns.
+        </comment>
+        
+        <!-- Composite index for user authentication -->
+        <createIndex tableName="users" indexName="idx_users_auth_lookup">
+            <column name="username"/>
+            <column name="is_active"/>
+        </createIndex>
+        
+        <!-- Index for user search by name -->
+        <createIndex tableName="users" indexName="idx_users_name_search">
+            <column name="first_name"/>
+            <column name="last_name"/>
+        </createIndex>
+        
+        <!-- Index for active users ordered by creation -->
+        <createIndex tableName="users" indexName="idx_users_active_created">
+            <column name="is_active"/>
+            <column name="created_at"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="users" indexName="idx_users_auth_lookup"/>
+            <dropIndex tableName="users" indexName="idx_users_name_search"/>
+            <dropIndex tableName="users" indexName="idx_users_active_created"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.13-create-product-performance-indexes" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create performance indexes for product catalog queries.
+            Optimizes common e-commerce search and filtering patterns.
+        </comment>
+        
+        <!-- Function-based index for case-insensitive SKU search -->
+        <sql>
+            CREATE INDEX idx_products_sku_upper 
+            ON products (UPPER(sku))
+        </sql>
+        
+        <!-- Composite index for product filtering -->
+        <createIndex tableName="products" indexName="idx_products_active_category_price">
+            <column name="is_active"/>
+            <column name="category_id"/>
+            <column name="price"/>
+        </createIndex>
+        
+        <!-- Index for inventory management -->
+        <createIndex tableName="products" indexName="idx_products_inventory_status">
+            <column name="quantity_available"/>
+            <column name="is_active"/>
+        </createIndex>
+        
+        <!-- Function-based index for product description search -->
+        <sql>
+            CREATE INDEX idx_products_desc_text 
+            ON products (UPPER(SUBSTR(description, 1, 100)))
+        </sql>
+        
+        <rollback>
+            <sql>DROP INDEX idx_products_sku_upper</sql>
+            <dropIndex tableName="products" indexName="idx_products_active_category_price"/>
+            <dropIndex tableName="products" indexName="idx_products_inventory_status"/>
+            <sql>DROP INDEX idx_products_desc_text</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.14-create-order-performance-indexes" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create comprehensive indexes for order management and reporting.
+            Optimizes order history, status tracking, and financial reporting queries.
+        </comment>
+        
+        <!-- Composite index for order history by user -->
+        <createIndex tableName="orders" indexName="idx_orders_user_date_status">
+            <column name="user_id"/>
+            <column name="order_date" type="desc"/>
+            <column name="status"/>
+        </createIndex>
+        
+        <!-- Index for order number lookups -->
+        <createIndex tableName="orders" indexName="idx_orders_number_unique">
+            <column name="order_number"/>
+        </createIndex>
+        
+        <!-- Composite index for financial reporting -->
+        <createIndex tableName="orders" indexName="idx_orders_date_amount_status">
+            <column name="order_date"/>
+            <column name="total_amount"/>
+            <column name="status"/>
+        </createIndex>
+        
+        <!-- Index for order status management -->
+        <createIndex tableName="orders" indexName="idx_orders_status_dates">
+            <column name="status"/>
+            <column name="order_date"/>
+            <column name="shipped_date"/>
+            <column name="delivered_date"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="orders" indexName="idx_orders_user_date_status"/>
+            <dropIndex tableName="orders" indexName="idx_orders_number_unique"/>
+            <dropIndex tableName="orders" indexName="idx_orders_date_amount_status"/>
+            <dropIndex tableName="orders" indexName="idx_orders_status_dates"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.15-create-order-items-performance-indexes" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create indexes for order items to optimize line item queries and aggregations.
+        </comment>
+        
+        <!-- Composite index for order item queries -->
+        <createIndex tableName="order_items" indexName="idx_order_items_order_product">
+            <column name="order_id"/>
+            <column name="product_id"/>
+        </createIndex>
+        
+        <!-- Index for product sales analysis -->
+        <createIndex tableName="order_items" indexName="idx_order_items_product_qty">
+            <column name="product_id"/>
+            <column name="quantity"/>
+            <column name="total_price"/>
+        </createIndex>
+        
+        <!-- Index for order total calculations -->
+        <createIndex tableName="order_items" indexName="idx_order_items_order_total">
+            <column name="order_id"/>
+            <column name="total_price"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="order_items" indexName="idx_order_items_order_product"/>
+            <dropIndex tableName="order_items" indexName="idx_order_items_product_qty"/>
+            <dropIndex tableName="order_items" indexName="idx_order_items_order_total"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.16-create-role-permission-performance-indexes" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create indexes for role-based access control performance optimization.
+        </comment>
+        
+        <!-- Composite index for user permission checks -->
+        <createIndex tableName="user_roles" indexName="idx_user_roles_user_active">
+            <column name="user_id"/>
+            <column name="is_active"/>
+        </createIndex>
+        
+        <!-- Index for role management queries -->
+        <createIndex tableName="user_roles" indexName="idx_user_roles_role_assigned">
+            <column name="role_id"/>
+            <column name="assigned_at"/>
+        </createIndex>
+        
+        <!-- Composite index for permission resolution -->
+        <createIndex tableName="role_permissions" indexName="idx_role_perms_role_active">
+            <column name="role_id"/>
+            <column name="is_active"/>
+        </createIndex>
+        
+        <!-- Index for permission audit trails -->
+        <createIndex tableName="role_permissions" indexName="idx_role_perms_granted">
+            <column name="granted_at"/>
+            <column name="granted_by"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="user_roles" indexName="idx_user_roles_user_active"/>
+            <dropIndex tableName="user_roles" indexName="idx_user_roles_role_assigned"/>
+            <dropIndex tableName="role_permissions" indexName="idx_role_perms_role_active"/>
+            <dropIndex tableName="role_permissions" indexName="idx_role_perms_granted"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.17-create-session-audit-performance-indexes" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create indexes for user session management and audit log performance.
+        </comment>
+        
+        <!-- Index for active session lookups -->
+        <createIndex tableName="user_sessions" indexName="idx_user_sessions_active_exp">
+            <column name="is_active"/>
+            <column name="expires_at"/>
+        </createIndex>
+        
+        <!-- Index for session cleanup -->
+        <createIndex tableName="user_sessions" indexName="idx_user_sessions_expires_logout">
+            <column name="expires_at"/>
+            <column name="logout_at"/>
+        </createIndex>
+        
+        <!-- Composite index for user activity tracking -->
+        <createIndex tableName="user_sessions" indexName="idx_user_sessions_user_activity">
+            <column name="user_id"/>
+            <column name="last_activity" type="desc"/>
+        </createIndex>
+        
+        <!-- Index for audit log table/record lookups -->
+        <createIndex tableName="audit_log" indexName="idx_audit_log_table_operation">
+            <column name="table_name"/>
+            <column name="operation"/>
+            <column name="changed_at" type="desc"/>
+        </createIndex>
+        
+        <!-- Index for audit trail by user -->
+        <createIndex tableName="audit_log" indexName="idx_audit_log_user_date">
+            <column name="changed_by"/>
+            <column name="changed_at" type="desc"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="user_sessions" indexName="idx_user_sessions_active_exp"/>
+            <dropIndex tableName="user_sessions" indexName="idx_user_sessions_expires_logout"/>
+            <dropIndex tableName="user_sessions" indexName="idx_user_sessions_user_activity"/>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_table_operation"/>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_user_date"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.18-create-oracle-statistics" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Gather Oracle statistics for cost-based optimizer.
+            Ensures optimal query execution plans for all tables.
+        </comment>
+        <sql>
+            BEGIN
+                -- Gather statistics for all user tables
+                FOR rec IN (SELECT table_name FROM user_tables WHERE table_name NOT LIKE '%$%') LOOP
+                    DBMS_STATS.GATHER_TABLE_STATS(
+                        ownname => USER,
+                        tabname => rec.table_name,
+                        estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE,
+                        method_opt => 'FOR ALL COLUMNS SIZE AUTO',
+                        cascade => TRUE
+                    );
+                END LOOP;
+            END;
+        </sql>
+        
+        <rollback>
+            <!-- Statistics don't need explicit rollback as they improve performance -->
+            <sql>SELECT 'Statistics gathered - no rollback needed' FROM DUAL</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.19-create-oracle-hints-views" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create performance-optimized views with Oracle hints for complex queries.
+        </comment>
+        <sql>
+            CREATE OR REPLACE VIEW v_user_order_summary AS
+            SELECT /*+ USE_INDEX(u idx_users_email) USE_INDEX(o idx_orders_user_date_status) */
+                u.id AS user_id,
+                u.username,
+                u.email,
+                u.first_name,
+                u.last_name,
+                COUNT(o.id) AS total_orders,
+                SUM(o.total_amount) AS total_spent,
+                AVG(o.total_amount) AS avg_order_value,
+                MAX(o.order_date) AS last_order_date,
+                MIN(o.order_date) AS first_order_date
+            FROM users u
+            LEFT JOIN orders o ON u.id = o.user_id
+            WHERE u.is_active = 1
+            GROUP BY u.id, u.username, u.email, u.first_name, u.last_name
+        </sql>
+        
+        <sql>
+            CREATE OR REPLACE VIEW v_product_sales_summary AS
+            SELECT /*+ USE_INDEX(p idx_products_active_category_price) USE_INDEX(oi idx_order_items_product_qty) */
+                p.id AS product_id,
+                p.name,
+                p.sku,
+                p.price,
+                p.quantity_available,
+                pc.name AS category_name,
+                COUNT(oi.id) AS times_sold,
+                SUM(oi.quantity) AS total_quantity_sold,
+                SUM(oi.total_price) AS total_revenue,
+                AVG(oi.unit_price) AS avg_selling_price
+            FROM products p
+            LEFT JOIN product_categories pc ON p.category_id = pc.id
+            LEFT JOIN order_items oi ON p.id = oi.product_id
+            WHERE p.is_active = 1
+            GROUP BY p.id, p.name, p.sku, p.price, p.quantity_available, pc.name
+        </sql>
+        
+        <rollback>
+            <sql>DROP VIEW v_user_order_summary</sql>
+            <sql>DROP VIEW v_product_sales_summary</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.20-create-performance-monitoring-procedures" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create Oracle procedures for performance monitoring and maintenance.
+        </comment>
+        <sql>
+            CREATE OR REPLACE PROCEDURE analyze_table_performance(
+                p_table_name IN VARCHAR2
+            ) AS
+                v_sql VARCHAR2(4000);
+            BEGIN
+                -- Analyze table and gather fresh statistics
+                v_sql := 'ANALYZE TABLE ' || p_table_name || ' COMPUTE STATISTICS';
+                EXECUTE IMMEDIATE v_sql;
+                
+                -- Gather extended statistics
+                DBMS_STATS.GATHER_TABLE_STATS(
+                    ownname => USER,
+                    tabname => p_table_name,
+                    estimate_percent => 100,
+                    method_opt => 'FOR ALL COLUMNS SIZE HISTOGRAM',
+                    cascade => TRUE
+                );
+                
+                DBMS_OUTPUT.PUT_LINE('Performance analysis completed for table: ' || p_table_name);
+            END analyze_table_performance;
+        </sql>
+        
+        <sql>
+            CREATE OR REPLACE PROCEDURE cleanup_expired_sessions AS
+                v_deleted_count NUMBER;
+            BEGIN
+                DELETE FROM user_sessions
+                WHERE expires_at < CURRENT_TIMESTAMP
+                OR (logout_at IS NOT NULL AND logout_at < CURRENT_TIMESTAMP - INTERVAL '7' DAY);
+                
+                v_deleted_count := SQL%ROWCOUNT;
+                COMMIT;
+                
+                DBMS_OUTPUT.PUT_LINE('Cleaned up ' || v_deleted_count || ' expired sessions');
+            END cleanup_expired_sessions;
+        </sql>
+        
+        <sql>
+            CREATE OR REPLACE PROCEDURE archive_old_audit_logs(
+                p_days_to_keep IN NUMBER DEFAULT 90
+            ) AS
+                v_cutoff_date TIMESTAMP;
+                v_archived_count NUMBER;
+            BEGIN
+                v_cutoff_date := CURRENT_TIMESTAMP - INTERVAL TO_CHAR(p_days_to_keep) DAY;
+                
+                -- In a real implementation, this would move data to an archive table
+                -- For this demo, we'll just count what would be archived
+                SELECT COUNT(*)
+                INTO v_archived_count
+                FROM audit_log
+                WHERE changed_at < v_cutoff_date;
+                
+                DBMS_OUTPUT.PUT_LINE('Would archive ' || v_archived_count || ' audit log entries older than ' || p_days_to_keep || ' days');
+            END archive_old_audit_logs;
+        </sql>
+        
+        <rollback>
+            <sql>DROP PROCEDURE analyze_table_performance</sql>
+            <sql>DROP PROCEDURE cleanup_expired_sessions</sql>
+            <sql>DROP PROCEDURE archive_old_audit_logs</sql>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

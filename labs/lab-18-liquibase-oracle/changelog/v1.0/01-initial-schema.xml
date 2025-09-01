@@ -1,0 +1,485 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Initial Schema Creation - Version 1.0 for Oracle Database -->
+    
+    <changeSet id="1.0.1-create-users-sequence" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sequenceExists sequenceName="users_seq"/>
+            </not>
+        </preConditions>
+        <comment>
+            Create sequence for users table primary key.
+            Oracle uses sequences instead of auto-increment columns.
+        </comment>
+        <createSequence sequenceName="users_seq" startValue="1" incrementBy="1"/>
+        
+        <rollback>
+            <dropSequence sequenceName="users_seq"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.2-create-users-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="users"/>
+            </not>
+            <sequenceExists sequenceName="users_seq"/>
+        </preConditions>
+        <comment>
+            Create users table to store application user information.
+            Uses Oracle-specific data types and constraints.
+        </comment>
+        <createTable tableName="users">
+            <column name="id" type="NUMBER(19,0)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="username" type="VARCHAR2(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="email" type="VARCHAR2(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="password_hash" type="VARCHAR2(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="first_name" type="VARCHAR2(50)"/>
+            <column name="last_name" type="VARCHAR2(50)"/>
+            <column name="is_active" type="NUMBER(1,0)" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="users"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.3-create-users-trigger" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create trigger for users table to auto-populate ID from sequence
+            and update the updated_at timestamp on modifications.
+        </comment>
+        <sql>
+            CREATE OR REPLACE TRIGGER users_bi_trg
+            BEFORE INSERT ON users
+            FOR EACH ROW
+            BEGIN
+                IF :NEW.id IS NULL THEN
+                    :NEW.id := users_seq.NEXTVAL;
+                END IF;
+            END;
+        </sql>
+        
+        <sql>
+            CREATE OR REPLACE TRIGGER users_bu_trg
+            BEFORE UPDATE ON users
+            FOR EACH ROW
+            BEGIN
+                :NEW.updated_at := CURRENT_TIMESTAMP;
+            END;
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER users_bi_trg</sql>
+            <sql>DROP TRIGGER users_bu_trg</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.4-create-products-sequence" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sequenceExists sequenceName="products_seq"/>
+            </not>
+        </preConditions>
+        <comment>Create sequence for products table primary key.</comment>
+        <createSequence sequenceName="products_seq" startValue="1" incrementBy="1"/>
+        
+        <rollback>
+            <dropSequence sequenceName="products_seq"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.5-create-products-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="products"/>
+            </not>
+            <sequenceExists sequenceName="products_seq"/>
+        </preConditions>
+        <comment>
+            Create products table to demonstrate Oracle e-commerce scenario.
+            Includes Oracle-specific data types and constraints.
+        </comment>
+        <createTable tableName="products">
+            <column name="id" type="NUMBER(19,0)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR2(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="CLOB"/>
+            <column name="sku" type="VARCHAR2(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="price" type="NUMBER(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cost" type="NUMBER(10,2)"/>
+            <column name="quantity_available" type="NUMBER(10,0)" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category" type="VARCHAR2(100)"/>
+            <column name="is_active" type="NUMBER(1,0)" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="products"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.6-create-products-triggers" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create triggers for products table auto-increment and timestamp update.</comment>
+        <sql>
+            CREATE OR REPLACE TRIGGER products_bi_trg
+            BEFORE INSERT ON products
+            FOR EACH ROW
+            BEGIN
+                IF :NEW.id IS NULL THEN
+                    :NEW.id := products_seq.NEXTVAL;
+                END IF;
+            END;
+        </sql>
+        
+        <sql>
+            CREATE OR REPLACE TRIGGER products_bu_trg
+            BEFORE UPDATE ON products
+            FOR EACH ROW
+            BEGIN
+                :NEW.updated_at := CURRENT_TIMESTAMP;
+            END;
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER products_bi_trg</sql>
+            <sql>DROP TRIGGER products_bu_trg</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.7-create-orders-sequence" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sequenceExists sequenceName="orders_seq"/>
+            </not>
+        </preConditions>
+        <comment>Create sequence for orders table primary key.</comment>
+        <createSequence sequenceName="orders_seq" startValue="1" incrementBy="1"/>
+        
+        <rollback>
+            <dropSequence sequenceName="orders_seq"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.8-create-orders-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="orders"/>
+            </not>
+            <tableExists tableName="users"/>
+            <sequenceExists sequenceName="orders_seq"/>
+        </preConditions>
+        <comment>
+            Create orders table with foreign key relationship to users.
+            Demonstrates Oracle table relationships and constraints.
+        </comment>
+        <createTable tableName="orders">
+            <column name="id" type="NUMBER(19,0)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="NUMBER(19,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="order_number" type="VARCHAR2(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="status" type="VARCHAR2(20)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_amount" type="NUMBER(12,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tax_amount" type="NUMBER(10,2)" defaultValueNumeric="0.00"/>
+            <column name="shipping_amount" type="NUMBER(8,2)" defaultValueNumeric="0.00"/>
+            <column name="order_date" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="shipped_date" type="TIMESTAMP"/>
+            <column name="delivered_date" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint 
+            baseTableName="orders" 
+            baseColumnNames="user_id" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_orders_user_id"
+            onDelete="CASCADE"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="orders" constraintName="fk_orders_user_id"/>
+            <dropTable tableName="orders"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.9-create-orders-triggers-and-constraints" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create triggers and check constraints for orders table.</comment>
+        
+        <!-- Auto-increment trigger -->
+        <sql>
+            CREATE OR REPLACE TRIGGER orders_bi_trg
+            BEFORE INSERT ON orders
+            FOR EACH ROW
+            BEGIN
+                IF :NEW.id IS NULL THEN
+                    :NEW.id := orders_seq.NEXTVAL;
+                END IF;
+            END;
+        </sql>
+        
+        <!-- Update timestamp trigger -->
+        <sql>
+            CREATE OR REPLACE TRIGGER orders_bu_trg
+            BEFORE UPDATE ON orders
+            FOR EACH ROW
+            BEGIN
+                :NEW.updated_at := CURRENT_TIMESTAMP;
+            END;
+        </sql>
+        
+        <!-- Check constraint for valid order status -->
+        <sql>
+            ALTER TABLE orders ADD CONSTRAINT chk_orders_status 
+            CHECK (status IN ('PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'))
+        </sql>
+        
+        <!-- Check constraint to ensure positive amounts -->
+        <sql>
+            ALTER TABLE orders ADD CONSTRAINT chk_orders_total_positive 
+            CHECK (total_amount >= 0)
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER orders_bi_trg</sql>
+            <sql>DROP TRIGGER orders_bu_trg</sql>
+            <sql>ALTER TABLE orders DROP CONSTRAINT chk_orders_status</sql>
+            <sql>ALTER TABLE orders DROP CONSTRAINT chk_orders_total_positive</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.10-create-order-items-sequence" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sequenceExists sequenceName="order_items_seq"/>
+            </not>
+        </preConditions>
+        <comment>Create sequence for order_items table primary key.</comment>
+        <createSequence sequenceName="order_items_seq" startValue="1" incrementBy="1"/>
+        
+        <rollback>
+            <dropSequence sequenceName="order_items_seq"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.11-create-order-items-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="order_items"/>
+            </not>
+            <tableExists tableName="orders"/>
+            <tableExists tableName="products"/>
+            <sequenceExists sequenceName="order_items_seq"/>
+        </preConditions>
+        <comment>
+            Create order_items junction table for Oracle many-to-many relationships.
+            Shows how to handle line items in an Oracle e-commerce system.
+        </comment>
+        <createTable tableName="order_items">
+            <column name="id" type="NUMBER(19,0)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="order_id" type="NUMBER(19,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_id" type="NUMBER(19,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quantity" type="NUMBER(10,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="unit_price" type="NUMBER(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_price" type="NUMBER(12,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint 
+            baseTableName="order_items" 
+            baseColumnNames="order_id" 
+            referencedTableName="orders" 
+            referencedColumnNames="id" 
+            constraintName="fk_order_items_order_id"
+            onDelete="CASCADE"/>
+            
+        <addForeignKeyConstraint 
+            baseTableName="order_items" 
+            baseColumnNames="product_id" 
+            referencedTableName="products" 
+            referencedColumnNames="id" 
+            constraintName="fk_order_items_product_id"
+            onDelete="CASCADE"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="order_items" constraintName="fk_order_items_order_id"/>
+            <dropForeignKeyConstraint baseTableName="order_items" constraintName="fk_order_items_product_id"/>
+            <dropTable tableName="order_items"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.12-create-order-items-triggers-constraints" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create triggers and constraints for order_items table.</comment>
+        
+        <!-- Auto-increment trigger -->
+        <sql>
+            CREATE OR REPLACE TRIGGER order_items_bi_trg
+            BEFORE INSERT ON order_items
+            FOR EACH ROW
+            BEGIN
+                IF :NEW.id IS NULL THEN
+                    :NEW.id := order_items_seq.NEXTVAL;
+                END IF;
+                -- Auto-calculate total_price
+                :NEW.total_price := :NEW.quantity * :NEW.unit_price;
+            END;
+        </sql>
+        
+        <!-- Update trigger to recalculate total -->
+        <sql>
+            CREATE OR REPLACE TRIGGER order_items_bu_trg
+            BEFORE UPDATE ON order_items
+            FOR EACH ROW
+            BEGIN
+                -- Auto-calculate total_price on update
+                :NEW.total_price := :NEW.quantity * :NEW.unit_price;
+            END;
+        </sql>
+        
+        <!-- Check constraints -->
+        <sql>
+            ALTER TABLE order_items ADD CONSTRAINT chk_order_items_quantity_positive 
+            CHECK (quantity > 0)
+        </sql>
+        
+        <sql>
+            ALTER TABLE order_items ADD CONSTRAINT chk_order_items_price_positive 
+            CHECK (unit_price >= 0)
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER order_items_bi_trg</sql>
+            <sql>DROP TRIGGER order_items_bu_trg</sql>
+            <sql>ALTER TABLE order_items DROP CONSTRAINT chk_order_items_quantity_positive</sql>
+            <sql>ALTER TABLE order_items DROP CONSTRAINT chk_order_items_price_positive</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.0.13-create-basic-indexes" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create basic indexes for better query performance in Oracle.
+            Demonstrates Oracle index creation and naming conventions.
+        </comment>
+        
+        <createIndex tableName="users" indexName="idx_users_email">
+            <column name="email"/>
+        </createIndex>
+        
+        <createIndex tableName="users" indexName="idx_users_username">
+            <column name="username"/>
+        </createIndex>
+        
+        <createIndex tableName="products" indexName="idx_products_sku">
+            <column name="sku"/>
+        </createIndex>
+        
+        <createIndex tableName="products" indexName="idx_products_category">
+            <column name="category"/>
+        </createIndex>
+        
+        <createIndex tableName="products" indexName="idx_products_active">
+            <column name="is_active"/>
+        </createIndex>
+        
+        <createIndex tableName="orders" indexName="idx_orders_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        
+        <createIndex tableName="orders" indexName="idx_orders_status">
+            <column name="status"/>
+        </createIndex>
+        
+        <createIndex tableName="orders" indexName="idx_orders_order_date">
+            <column name="order_date"/>
+        </createIndex>
+        
+        <createIndex tableName="order_items" indexName="idx_order_items_order_id">
+            <column name="order_id"/>
+        </createIndex>
+        
+        <createIndex tableName="order_items" indexName="idx_order_items_product_id">
+            <column name="product_id"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="users" indexName="idx_users_email"/>
+            <dropIndex tableName="users" indexName="idx_users_username"/>
+            <dropIndex tableName="products" indexName="idx_products_sku"/>
+            <dropIndex tableName="products" indexName="idx_products_category"/>
+            <dropIndex tableName="products" indexName="idx_products_active"/>
+            <dropIndex tableName="orders" indexName="idx_orders_user_id"/>
+            <dropIndex tableName="orders" indexName="idx_orders_status"/>
+            <dropIndex tableName="orders" indexName="idx_orders_order_date"/>
+            <dropIndex tableName="order_items" indexName="idx_order_items_order_id"/>
+            <dropIndex tableName="order_items" indexName="idx_order_items_product_id"/>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

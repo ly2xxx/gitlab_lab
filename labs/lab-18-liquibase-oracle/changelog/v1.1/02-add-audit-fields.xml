@@ -1,0 +1,449 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Audit Trail Implementation - Version 1.1 for Oracle Database -->
+    
+    <changeSet id="1.1.13-add-audit-fields-to-products" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="products"/>
+            <not>
+                <columnExists tableName="products" columnName="created_by"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add audit fields to products table for tracking changes.
+            Demonstrates Oracle audit trail implementation patterns.
+        </comment>
+        
+        <addColumn tableName="products">
+            <column name="created_by" type="NUMBER(19,0)"/>
+            <column name="updated_by" type="NUMBER(19,0)"/>
+            <column name="version" type="NUMBER(10,0)" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        
+        <addForeignKeyConstraint 
+            baseTableName="products" 
+            baseColumnNames="created_by" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_products_created_by"
+            onDelete="SET NULL"/>
+            
+        <addForeignKeyConstraint 
+            baseTableName="products" 
+            baseColumnNames="updated_by" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_products_updated_by"
+            onDelete="SET NULL"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="products" constraintName="fk_products_created_by"/>
+            <dropForeignKeyConstraint baseTableName="products" constraintName="fk_products_updated_by"/>
+            <dropColumn tableName="products" columnName="created_by"/>
+            <dropColumn tableName="products" columnName="updated_by"/>
+            <dropColumn tableName="products" columnName="version"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.14-update-products-audit-trigger" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Update products triggers to handle audit fields and version control.</comment>
+        <sql>
+            CREATE OR REPLACE TRIGGER products_bu_trg
+            BEFORE UPDATE ON products
+            FOR EACH ROW
+            BEGIN
+                :NEW.updated_at := CURRENT_TIMESTAMP;
+                :NEW.version := :OLD.version + 1;
+                -- updated_by should be set by the application
+            END;
+        </sql>
+        
+        <rollback>
+            <sql>
+                CREATE OR REPLACE TRIGGER products_bu_trg
+                BEFORE UPDATE ON products
+                FOR EACH ROW
+                BEGIN
+                    :NEW.updated_at := CURRENT_TIMESTAMP;
+                END;
+            </sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.15-create-audit-log-sequence" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sequenceExists sequenceName="audit_log_seq"/>
+            </not>
+        </preConditions>
+        <comment>Create sequence for audit_log table primary key.</comment>
+        <createSequence sequenceName="audit_log_seq" startValue="1" incrementBy="1"/>
+        
+        <rollback>
+            <dropSequence sequenceName="audit_log_seq"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.16-create-audit-log-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="audit_log"/>
+            </not>
+            <sequenceExists sequenceName="audit_log_seq"/>
+        </preConditions>
+        <comment>
+            Create comprehensive audit log table for tracking all database changes.
+            Demonstrates Oracle audit trail best practices and JSON storage.
+        </comment>
+        <createTable tableName="audit_log">
+            <column name="id" type="NUMBER(19,0)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="table_name" type="VARCHAR2(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="record_id" type="NUMBER(19,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="operation" type="VARCHAR2(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="old_values" type="CLOB"/>
+            <column name="new_values" type="CLOB"/>
+            <column name="changed_by" type="NUMBER(19,0)"/>
+            <column name="changed_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ip_address" type="VARCHAR2(45)"/>
+            <column name="user_agent" type="VARCHAR2(500)"/>
+            <column name="session_id" type="VARCHAR2(100)"/>
+        </createTable>
+        
+        <addForeignKeyConstraint 
+            baseTableName="audit_log" 
+            baseColumnNames="changed_by" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_audit_log_changed_by"
+            onDelete="SET NULL"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="audit_log" constraintName="fk_audit_log_changed_by"/>
+            <dropTable tableName="audit_log"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.17-create-audit-log-triggers" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create trigger for audit_log table auto-increment and constraints.</comment>
+        <sql>
+            CREATE OR REPLACE TRIGGER audit_log_bi_trg
+            BEFORE INSERT ON audit_log
+            FOR EACH ROW
+            BEGIN
+                IF :NEW.id IS NULL THEN
+                    :NEW.id := audit_log_seq.NEXTVAL;
+                END IF;
+            END;
+        </sql>
+        
+        <!-- Check constraint for valid operations -->
+        <sql>
+            ALTER TABLE audit_log ADD CONSTRAINT chk_audit_log_operation 
+            CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE'))
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER audit_log_bi_trg</sql>
+            <sql>ALTER TABLE audit_log DROP CONSTRAINT chk_audit_log_operation</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.18-create-user-sessions-sequence" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sequenceExists sequenceName="user_sessions_seq"/>
+            </not>
+        </preConditions>
+        <comment>Create sequence for user_sessions table primary key.</comment>
+        <createSequence sequenceName="user_sessions_seq" startValue="1" incrementBy="1"/>
+        
+        <rollback>
+            <dropSequence sequenceName="user_sessions_seq"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.19-create-user-sessions-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="user_sessions"/>
+            </not>
+            <tableExists tableName="users"/>
+            <sequenceExists sequenceName="user_sessions_seq"/>
+        </preConditions>
+        <comment>
+            Create user sessions table for tracking user activity and authentication.
+            Demonstrates Oracle session management and security audit patterns.
+        </comment>
+        <createTable tableName="user_sessions">
+            <column name="id" type="NUMBER(19,0)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="NUMBER(19,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="session_token" type="VARCHAR2(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="ip_address" type="VARCHAR2(45)"/>
+            <column name="user_agent" type="VARCHAR2(500)"/>
+            <column name="login_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_activity" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="logout_at" type="TIMESTAMP"/>
+            <column name="is_active" type="NUMBER(1,0)" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint 
+            baseTableName="user_sessions" 
+            baseColumnNames="user_id" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_user_sessions_user_id"
+            onDelete="CASCADE"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="user_sessions" constraintName="fk_user_sessions_user_id"/>
+            <dropTable tableName="user_sessions"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.20-create-user-sessions-triggers" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create triggers for user_sessions table management.</comment>
+        <sql>
+            CREATE OR REPLACE TRIGGER user_sessions_bi_trg
+            BEFORE INSERT ON user_sessions
+            FOR EACH ROW
+            BEGIN
+                IF :NEW.id IS NULL THEN
+                    :NEW.id := user_sessions_seq.NEXTVAL;
+                END IF;
+                -- Set default expiration to 24 hours if not specified
+                IF :NEW.expires_at IS NULL THEN
+                    :NEW.expires_at := CURRENT_TIMESTAMP + INTERVAL '24' HOUR;
+                END IF;
+            END;
+        </sql>
+        
+        <sql>
+            CREATE OR REPLACE TRIGGER user_sessions_bu_trg
+            BEFORE UPDATE ON user_sessions
+            FOR EACH ROW
+            BEGIN
+                :NEW.last_activity := CURRENT_TIMESTAMP;
+            END;
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER user_sessions_bi_trg</sql>
+            <sql>DROP TRIGGER user_sessions_bu_trg</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.21-create-products-audit-trigger" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create comprehensive audit triggers for products table.
+            Demonstrates Oracle audit trail automation with JSON storage.
+        </comment>
+        <sql>
+            CREATE OR REPLACE TRIGGER products_audit_trg
+            AFTER INSERT OR UPDATE OR DELETE ON products
+            FOR EACH ROW
+            DECLARE
+                v_operation VARCHAR2(10);
+                v_old_values CLOB;
+                v_new_values CLOB;
+            BEGIN
+                IF INSERTING THEN
+                    v_operation := 'INSERT';
+                    v_new_values := JSON_OBJECT(
+                        'id' VALUE :NEW.id,
+                        'name' VALUE :NEW.name,
+                        'sku' VALUE :NEW.sku,
+                        'price' VALUE :NEW.price,
+                        'quantity_available' VALUE :NEW.quantity_available,
+                        'is_active' VALUE :NEW.is_active
+                    );
+                ELSIF UPDATING THEN
+                    v_operation := 'UPDATE';
+                    v_old_values := JSON_OBJECT(
+                        'id' VALUE :OLD.id,
+                        'name' VALUE :OLD.name,
+                        'sku' VALUE :OLD.sku,
+                        'price' VALUE :OLD.price,
+                        'quantity_available' VALUE :OLD.quantity_available,
+                        'is_active' VALUE :OLD.is_active,
+                        'version' VALUE :OLD.version
+                    );
+                    v_new_values := JSON_OBJECT(
+                        'id' VALUE :NEW.id,
+                        'name' VALUE :NEW.name,
+                        'sku' VALUE :NEW.sku,
+                        'price' VALUE :NEW.price,
+                        'quantity_available' VALUE :NEW.quantity_available,
+                        'is_active' VALUE :NEW.is_active,
+                        'version' VALUE :NEW.version
+                    );
+                ELSIF DELETING THEN
+                    v_operation := 'DELETE';
+                    v_old_values := JSON_OBJECT(
+                        'id' VALUE :OLD.id,
+                        'name' VALUE :OLD.name,
+                        'sku' VALUE :OLD.sku,
+                        'price' VALUE :OLD.price,
+                        'quantity_available' VALUE :OLD.quantity_available,
+                        'is_active' VALUE :OLD.is_active
+                    );
+                END IF;
+                
+                INSERT INTO audit_log (
+                    table_name, record_id, operation, 
+                    old_values, new_values, changed_by
+                ) VALUES (
+                    'PRODUCTS', 
+                    COALESCE(:NEW.id, :OLD.id), 
+                    v_operation,
+                    v_old_values, 
+                    v_new_values, 
+                    COALESCE(:NEW.updated_by, :NEW.created_by, :OLD.updated_by, :OLD.created_by)
+                );
+            END;
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER products_audit_trg</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.22-create-orders-audit-trigger" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create audit trigger for orders table to track order changes.</comment>
+        <sql>
+            CREATE OR REPLACE TRIGGER orders_audit_trg
+            AFTER INSERT OR UPDATE OR DELETE ON orders
+            FOR EACH ROW
+            DECLARE
+                v_operation VARCHAR2(10);
+                v_old_values CLOB;
+                v_new_values CLOB;
+            BEGIN
+                IF INSERTING THEN
+                    v_operation := 'INSERT';
+                    v_new_values := JSON_OBJECT(
+                        'id' VALUE :NEW.id,
+                        'user_id' VALUE :NEW.user_id,
+                        'order_number' VALUE :NEW.order_number,
+                        'status' VALUE :NEW.status,
+                        'total_amount' VALUE :NEW.total_amount
+                    );
+                ELSIF UPDATING THEN
+                    v_operation := 'UPDATE';
+                    v_old_values := JSON_OBJECT(
+                        'id' VALUE :OLD.id,
+                        'status' VALUE :OLD.status,
+                        'total_amount' VALUE :OLD.total_amount,
+                        'shipped_date' VALUE :OLD.shipped_date,
+                        'delivered_date' VALUE :OLD.delivered_date
+                    );
+                    v_new_values := JSON_OBJECT(
+                        'id' VALUE :NEW.id,
+                        'status' VALUE :NEW.status,
+                        'total_amount' VALUE :NEW.total_amount,
+                        'shipped_date' VALUE :NEW.shipped_date,
+                        'delivered_date' VALUE :NEW.delivered_date
+                    );
+                ELSIF DELETING THEN
+                    v_operation := 'DELETE';
+                    v_old_values := JSON_OBJECT(
+                        'id' VALUE :OLD.id,
+                        'order_number' VALUE :OLD.order_number,
+                        'status' VALUE :OLD.status,
+                        'total_amount' VALUE :OLD.total_amount
+                    );
+                END IF;
+                
+                INSERT INTO audit_log (
+                    table_name, record_id, operation, 
+                    old_values, new_values
+                ) VALUES (
+                    'ORDERS', 
+                    COALESCE(:NEW.id, :OLD.id), 
+                    v_operation,
+                    v_old_values, 
+                    v_new_values
+                );
+            END;
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER orders_audit_trg</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.23-create-audit-indexes" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create indexes for audit and session tables to optimize queries.</comment>
+        
+        <createIndex tableName="audit_log" indexName="idx_audit_log_table_record">
+            <column name="table_name"/>
+            <column name="record_id"/>
+        </createIndex>
+        
+        <createIndex tableName="audit_log" indexName="idx_audit_log_changed_at">
+            <column name="changed_at"/>
+        </createIndex>
+        
+        <createIndex tableName="audit_log" indexName="idx_audit_log_changed_by">
+            <column name="changed_by"/>
+        </createIndex>
+        
+        <createIndex tableName="user_sessions" indexName="idx_user_sessions_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        
+        <createIndex tableName="user_sessions" indexName="idx_user_sessions_token">
+            <column name="session_token"/>
+        </createIndex>
+        
+        <createIndex tableName="user_sessions" indexName="idx_user_sessions_expires_at">
+            <column name="expires_at"/>
+        </createIndex>
+        
+        <createIndex tableName="user_sessions" indexName="idx_user_sessions_active">
+            <column name="is_active"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_table_record"/>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_changed_at"/>
+            <dropIndex tableName="audit_log" indexName="idx_audit_log_changed_by"/>
+            <dropIndex tableName="user_sessions" indexName="idx_user_sessions_user_id"/>
+            <dropIndex tableName="user_sessions" indexName="idx_user_sessions_token"/>
+            <dropIndex tableName="user_sessions" indexName="idx_user_sessions_expires_at"/>
+            <dropIndex tableName="user_sessions" indexName="idx_user_sessions_active"/>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

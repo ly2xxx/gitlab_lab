@@ -1,0 +1,488 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Test Environment Specific Changes for Oracle Database -->
+    
+    <changeSet id="test-1.0-create-test-validation-procedures" author="liquibase-oracle-lab" dbms="oracle" context="test">
+        <comment>
+            Create test environment validation procedures for automated testing.
+            These procedures help validate data integrity and business rules.
+        </comment>
+        
+        <!-- Procedure to validate test data integrity -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE validate_test_data_integrity AS
+                v_error_count NUMBER := 0;
+                v_error_msg VARCHAR2(4000) := '';
+            BEGIN
+                -- Check for orphaned order items
+                SELECT COUNT(*) INTO v_error_count
+                FROM order_items oi
+                WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.id = oi.order_id);
+                
+                IF v_error_count > 0 THEN
+                    v_error_msg := v_error_msg || 'Found ' || v_error_count || ' orphaned order items. ';
+                END IF;
+                
+                -- Check for orphaned user roles
+                SELECT COUNT(*) INTO v_error_count
+                FROM user_roles ur
+                WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = ur.user_id);
+                
+                IF v_error_count > 0 THEN
+                    v_error_msg := v_error_msg || 'Found ' || v_error_count || ' orphaned user roles. ';
+                END IF;
+                
+                -- Check for products with negative inventory
+                SELECT COUNT(*) INTO v_error_count
+                FROM products
+                WHERE quantity_available < 0;
+                
+                IF v_error_count > 0 THEN
+                    v_error_msg := v_error_msg || 'Found ' || v_error_count || ' products with negative inventory. ';
+                END IF;
+                
+                -- Check for orders with invalid totals
+                SELECT COUNT(*) INTO v_error_count
+                FROM orders o
+                WHERE o.total_amount != (
+                    SELECT NVL(SUM(oi.total_price), 0)
+                    FROM order_items oi
+                    WHERE oi.order_id = o.id
+                );
+                
+                IF v_error_count > 0 THEN
+                    v_error_msg := v_error_msg || 'Found ' || v_error_count || ' orders with invalid totals. ';
+                END IF;
+                
+                IF LENGTH(v_error_msg) > 0 THEN
+                    RAISE_APPLICATION_ERROR(-20100, 'Data integrity validation failed: ' || v_error_msg);
+                ELSE
+                    DBMS_OUTPUT.PUT_LINE('All data integrity validations passed');
+                END IF;
+            END validate_test_data_integrity;
+        </sql>
+        
+        <!-- Procedure to reset test sequences -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE reset_test_sequences AS
+                v_sql VARCHAR2(1000);
+            BEGIN
+                -- Reset sequences to ensure consistent test data
+                FOR seq_rec IN (
+                    SELECT sequence_name 
+                    FROM user_sequences 
+                    WHERE sequence_name NOT LIKE '%\$%' ESCAPE '\'
+                ) LOOP
+                    v_sql := 'ALTER SEQUENCE ' || seq_rec.sequence_name || ' RESTART START WITH 1';
+                    BEGIN
+                        EXECUTE IMMEDIATE v_sql;
+                    EXCEPTION
+                        WHEN OTHERS THEN
+                            -- Oracle doesn't support RESTART, so we'll drop and recreate
+                            EXECUTE IMMEDIATE 'DROP SEQUENCE ' || seq_rec.sequence_name;
+                            EXECUTE IMMEDIATE 'CREATE SEQUENCE ' || seq_rec.sequence_name || 
+                                            ' START WITH 1 INCREMENT BY 1';
+                    END;
+                END LOOP;
+                
+                DBMS_OUTPUT.PUT_LINE('Test sequences reset completed');
+            END reset_test_sequences;
+        </sql>
+        
+        <!-- Procedure to cleanup test data -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE cleanup_test_data AS
+            BEGIN
+                -- Clean up in proper order to respect foreign key constraints
+                DELETE FROM role_permissions;
+                DELETE FROM user_roles;
+                DELETE FROM order_items;
+                DELETE FROM orders;
+                DELETE FROM user_sessions;
+                DELETE FROM audit_log;
+                DELETE FROM products;
+                DELETE FROM product_categories;
+                DELETE FROM permissions;
+                DELETE FROM roles;
+                DELETE FROM users;
+                
+                COMMIT;
+                DBMS_OUTPUT.PUT_LINE('Test data cleanup completed');
+            END cleanup_test_data;
+        </sql>
+        
+        <rollback>
+            <sql>DROP PROCEDURE validate_test_data_integrity</sql>
+            <sql>DROP PROCEDURE reset_test_sequences</sql>
+            <sql>DROP PROCEDURE cleanup_test_data</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.1-create-test-data-generators" author="liquibase-oracle-lab" dbms="oracle" context="test">
+        <comment>
+            Create procedures to generate predictable test data for automated testing.
+        </comment>
+        
+        <!-- Procedure to create standard test dataset -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE create_standard_test_dataset AS
+                v_admin_user_id NUMBER;
+                v_customer_user_id NUMBER;
+                v_product_id NUMBER;
+                v_order_id NUMBER;
+            BEGIN
+                -- Create test admin user
+                INSERT INTO users (username, email, password_hash, first_name, last_name, is_active)
+                VALUES ('test_admin', 'test.admin@oracle-test.com', 'test_hash', 'Test', 'Admin', 1)
+                RETURNING id INTO v_admin_user_id;
+                
+                -- Create test customer user
+                INSERT INTO users (username, email, password_hash, first_name, last_name, is_active)
+                VALUES ('test_customer', 'test.customer@oracle-test.com', 'test_hash', 'Test', 'Customer', 1)
+                RETURNING id INTO v_customer_user_id;
+                
+                -- Create test roles
+                INSERT INTO roles (name, description, is_active)
+                VALUES ('TEST_ADMIN', 'Test administrator role', 1);
+                
+                INSERT INTO roles (name, description, is_active)
+                VALUES ('TEST_CUSTOMER', 'Test customer role', 1);
+                
+                -- Create test product category
+                INSERT INTO product_categories (name, description, is_active)
+                VALUES ('Test Category', 'Category for test products', 1);
+                
+                -- Create test product
+                INSERT INTO products (name, description, sku, price, cost, quantity_available, is_active)
+                VALUES ('Test Product', 'Product for automated testing', 'TEST-PROD-001', 100.00, 50.00, 10, 1)
+                RETURNING id INTO v_product_id;
+                
+                -- Create test order
+                order_management.create_order(v_customer_user_id, 'TEST-ORDER-001', v_order_id);
+                order_management.add_order_item(v_order_id, v_product_id, 2, 100.00);
+                
+                -- Create test permissions
+                INSERT INTO permissions (name, resource, action, description, is_active)
+                VALUES ('TEST_READ', 'TEST_RESOURCE', 'READ', 'Test read permission', 1);
+                
+                INSERT INTO permissions (name, resource, action, description, is_active)
+                VALUES ('TEST_WRITE', 'TEST_RESOURCE', 'WRITE', 'Test write permission', 1);
+                
+                COMMIT;
+                DBMS_OUTPUT.PUT_LINE('Standard test dataset created successfully');
+            END create_standard_test_dataset;
+        </sql>
+        
+        <!-- Procedure to create edge case test data -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE create_edge_case_test_data AS
+            BEGIN
+                -- User with very long names (testing field limits)
+                INSERT INTO users (username, email, password_hash, first_name, last_name, is_active)
+                VALUES (
+                    'very_long_username_for_testing_field_limits_max',
+                    'very.long.email.address.for.testing.field.limits@oracle-test-environment.com',
+                    'test_hash_for_very_long_username_testing',
+                    RPAD('VeryLongFirstName', 50, 'X'),
+                    RPAD('VeryLongLastName', 50, 'Y'),
+                    1
+                );
+                
+                -- Product with zero price
+                INSERT INTO products (name, description, sku, price, cost, quantity_available, is_active)
+                VALUES ('Free Product', 'Product with zero price for testing', 'FREE-PROD-001', 0.00, 0.00, 1, 1);
+                
+                -- Product with very high price
+                INSERT INTO products (name, description, sku, price, cost, quantity_available, is_active)
+                VALUES (
+                    'Expensive Product', 
+                    'Product with maximum price for testing', 
+                    'EXPENSIVE-001', 
+                    99999999.99, 
+                    50000000.00, 
+                    1, 
+                    1
+                );
+                
+                -- Product with zero inventory
+                INSERT INTO products (name, description, sku, price, cost, quantity_available, is_active)
+                VALUES ('Out of Stock', 'Product with zero inventory', 'OOS-PROD-001', 50.00, 25.00, 0, 1);
+                
+                -- Inactive user
+                INSERT INTO users (username, email, password_hash, first_name, last_name, is_active)
+                VALUES ('inactive_user', 'inactive@oracle-test.com', 'test_hash', 'Inactive', 'User', 0);
+                
+                COMMIT;
+                DBMS_OUTPUT.PUT_LINE('Edge case test data created successfully');
+            END create_edge_case_test_data;
+        </sql>
+        
+        <rollback>
+            <sql>DROP PROCEDURE create_standard_test_dataset</sql>
+            <sql>DROP PROCEDURE create_edge_case_test_data</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.2-create-test-assertion-functions" author="liquibase-oracle-lab" dbms="oracle" context="test">
+        <comment>
+            Create assertion functions for automated testing validation.
+        </comment>
+        
+        <!-- Function to assert user count -->
+        <sql>
+            CREATE OR REPLACE FUNCTION assert_user_count(
+                p_expected_count IN NUMBER
+            ) RETURN BOOLEAN AS
+                v_actual_count NUMBER;
+            BEGIN
+                SELECT COUNT(*) INTO v_actual_count FROM users;
+                
+                IF v_actual_count = p_expected_count THEN
+                    RETURN TRUE;
+                ELSE
+                    DBMS_OUTPUT.PUT_LINE('User count assertion failed. Expected: ' || 
+                        p_expected_count || ', Actual: ' || v_actual_count);
+                    RETURN FALSE;
+                END IF;
+            END assert_user_count;
+        </sql>
+        
+        <!-- Function to assert product inventory -->
+        <sql>
+            CREATE OR REPLACE FUNCTION assert_product_inventory(
+                p_product_sku IN VARCHAR2,
+                p_expected_quantity IN NUMBER
+            ) RETURN BOOLEAN AS
+                v_actual_quantity NUMBER;
+            BEGIN
+                SELECT quantity_available 
+                INTO v_actual_quantity 
+                FROM products 
+                WHERE sku = p_product_sku;
+                
+                IF v_actual_quantity = p_expected_quantity THEN
+                    RETURN TRUE;
+                ELSE
+                    DBMS_OUTPUT.PUT_LINE('Inventory assertion failed for SKU: ' || p_product_sku || 
+                        '. Expected: ' || p_expected_quantity || ', Actual: ' || v_actual_quantity);
+                    RETURN FALSE;
+                END IF;
+            EXCEPTION
+                WHEN NO_DATA_FOUND THEN
+                    DBMS_OUTPUT.PUT_LINE('Product not found: ' || p_product_sku);
+                    RETURN FALSE;
+            END assert_product_inventory;
+        </sql>
+        
+        <!-- Function to assert order total -->
+        <sql>
+            CREATE OR REPLACE FUNCTION assert_order_total(
+                p_order_number IN VARCHAR2,
+                p_expected_total IN NUMBER
+            ) RETURN BOOLEAN AS
+                v_actual_total NUMBER;
+            BEGIN
+                SELECT total_amount 
+                INTO v_actual_total 
+                FROM orders 
+                WHERE order_number = p_order_number;
+                
+                IF ABS(v_actual_total - p_expected_total) < 0.01 THEN -- Allow for rounding
+                    RETURN TRUE;
+                ELSE
+                    DBMS_OUTPUT.PUT_LINE('Order total assertion failed for order: ' || p_order_number || 
+                        '. Expected: ' || p_expected_total || ', Actual: ' || v_actual_total);
+                    RETURN FALSE;
+                END IF;
+            EXCEPTION
+                WHEN NO_DATA_FOUND THEN
+                    DBMS_OUTPUT.PUT_LINE('Order not found: ' || p_order_number);
+                    RETURN FALSE;
+            END assert_order_total;
+        </sql>
+        
+        <rollback>
+            <sql>DROP FUNCTION assert_user_count</sql>
+            <sql>DROP FUNCTION assert_product_inventory</sql>
+            <sql>DROP FUNCTION assert_order_total</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.3-create-test-execution-procedures" author="liquibase-oracle-lab" dbms="oracle" context="test">
+        <comment>
+            Create procedures to execute comprehensive test suites.
+        </comment>
+        
+        <!-- Main test suite execution procedure -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE run_test_suite AS
+                v_test_count NUMBER := 0;
+                v_passed_count NUMBER := 0;
+                v_failed_count NUMBER := 0;
+                v_start_time TIMESTAMP;
+            BEGIN
+                v_start_time := CURRENT_TIMESTAMP;
+                
+                DBMS_OUTPUT.PUT_LINE('=== Oracle Liquibase Test Suite Execution ===');
+                DBMS_OUTPUT.PUT_LINE('Start time: ' || TO_CHAR(v_start_time, 'YYYY-MM-DD HH24:MI:SS'));
+                DBMS_OUTPUT.PUT_LINE('');
+                
+                -- Test 1: Data integrity validation
+                v_test_count := v_test_count + 1;
+                DBMS_OUTPUT.PUT_LINE('Test 1: Data Integrity Validation');
+                BEGIN
+                    validate_test_data_integrity();
+                    DBMS_OUTPUT.PUT_LINE('PASSED');
+                    v_passed_count := v_passed_count + 1;
+                EXCEPTION
+                    WHEN OTHERS THEN
+                        DBMS_OUTPUT.PUT_LINE('FAILED: ' || SQLERRM);
+                        v_failed_count := v_failed_count + 1;
+                END;
+                
+                -- Test 2: User count assertion
+                v_test_count := v_test_count + 1;
+                DBMS_OUTPUT.PUT_LINE('Test 2: User Count Validation');
+                IF assert_user_count(7) THEN -- Expected: admin, john_doe, jane_smith, bob_johnson, test_inactive, test_admin, test_customer
+                    DBMS_OUTPUT.PUT_LINE('PASSED');
+                    v_passed_count := v_passed_count + 1;
+                ELSE
+                    DBMS_OUTPUT.PUT_LINE('FAILED');
+                    v_failed_count := v_failed_count + 1;
+                END IF;
+                
+                -- Test 3: Product inventory test
+                v_test_count := v_test_count + 1;
+                DBMS_OUTPUT.PUT_LINE('Test 3: Product Inventory Validation');
+                IF assert_product_inventory('TEST-PROD-001', 8) THEN -- Should be 10 - 2 (from test order)
+                    DBMS_OUTPUT.PUT_LINE('PASSED');
+                    v_passed_count := v_passed_count + 1;
+                ELSE
+                    DBMS_OUTPUT.PUT_LINE('FAILED');
+                    v_failed_count := v_failed_count + 1;
+                END IF;
+                
+                -- Test 4: Order total validation
+                v_test_count := v_test_count + 1;
+                DBMS_OUTPUT.PUT_LINE('Test 4: Order Total Validation');
+                IF assert_order_total('TEST-ORDER-001', 200.00) THEN -- 2 * 100.00
+                    DBMS_OUTPUT.PUT_LINE('PASSED');
+                    v_passed_count := v_passed_count + 1;
+                ELSE
+                    DBMS_OUTPUT.PUT_LINE('FAILED');
+                    v_failed_count := v_failed_count + 1;
+                END IF;
+                
+                -- Summary
+                DBMS_OUTPUT.PUT_LINE('');
+                DBMS_OUTPUT.PUT_LINE('=== Test Suite Summary ===');
+                DBMS_OUTPUT.PUT_LINE('Total Tests: ' || v_test_count);
+                DBMS_OUTPUT.PUT_LINE('Passed: ' || v_passed_count);
+                DBMS_OUTPUT.PUT_LINE('Failed: ' || v_failed_count);
+                DBMS_OUTPUT.PUT_LINE('Success Rate: ' || ROUND((v_passed_count / v_test_count) * 100, 2) || '%');
+                DBMS_OUTPUT.PUT_LINE('Duration: ' || 
+                    EXTRACT(SECOND FROM (CURRENT_TIMESTAMP - v_start_time)) || ' seconds');
+                
+                IF v_failed_count > 0 THEN
+                    RAISE_APPLICATION_ERROR(-20200, 'Test suite failed with ' || v_failed_count || ' failures');
+                END IF;
+            END run_test_suite;
+        </sql>
+        
+        <rollback>
+            <sql>DROP PROCEDURE run_test_suite</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="test-1.4-create-performance-benchmark-procedures" author="liquibase-oracle-lab" dbms="oracle" context="test">
+        <comment>
+            Create procedures for performance benchmarking in test environment.
+        </comment>
+        
+        <!-- Procedure to benchmark user queries -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE benchmark_user_queries AS
+                v_start_time TIMESTAMP;
+                v_end_time TIMESTAMP;
+                v_duration NUMBER;
+                v_count NUMBER;
+            BEGIN
+                DBMS_OUTPUT.PUT_LINE('=== User Query Benchmarks ===');
+                
+                -- Benchmark 1: User lookup by username
+                v_start_time := CURRENT_TIMESTAMP;
+                FOR i IN 1..1000 LOOP
+                    SELECT COUNT(*) INTO v_count FROM users WHERE username = 'test_admin';
+                END LOOP;
+                v_end_time := CURRENT_TIMESTAMP;
+                v_duration := EXTRACT(SECOND FROM (v_end_time - v_start_time));
+                DBMS_OUTPUT.PUT_LINE('User lookup by username (1000 iterations): ' || v_duration || 's');
+                
+                -- Benchmark 2: Active users query
+                v_start_time := CURRENT_TIMESTAMP;
+                FOR i IN 1..100 LOOP
+                    SELECT COUNT(*) INTO v_count FROM users WHERE is_active = 1;
+                END LOOP;
+                v_end_time := CURRENT_TIMESTAMP;
+                v_duration := EXTRACT(SECOND FROM (v_end_time - v_start_time));
+                DBMS_OUTPUT.PUT_LINE('Active users query (100 iterations): ' || v_duration || 's');
+                
+                -- Benchmark 3: User with roles join
+                v_start_time := CURRENT_TIMESTAMP;
+                FOR i IN 1..100 LOOP
+                    SELECT COUNT(*) INTO v_count 
+                    FROM users u 
+                    JOIN user_roles ur ON u.id = ur.user_id
+                    JOIN roles r ON ur.role_id = r.id
+                    WHERE u.is_active = 1;
+                END LOOP;
+                v_end_time := CURRENT_TIMESTAMP;
+                v_duration := EXTRACT(SECOND FROM (v_end_time - v_start_time));
+                DBMS_OUTPUT.PUT_LINE('User-roles join query (100 iterations): ' || v_duration || 's');
+            END benchmark_user_queries;
+        </sql>
+        
+        <!-- Procedure to benchmark product queries -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE benchmark_product_queries AS
+                v_start_time TIMESTAMP;
+                v_end_time TIMESTAMP;
+                v_duration NUMBER;
+                v_count NUMBER;
+            BEGIN
+                DBMS_OUTPUT.PUT_LINE('=== Product Query Benchmarks ===');
+                
+                -- Benchmark 1: Product search by SKU
+                v_start_time := CURRENT_TIMESTAMP;
+                FOR i IN 1..1000 LOOP
+                    SELECT COUNT(*) INTO v_count FROM products WHERE sku = 'TEST-PROD-001';
+                END LOOP;
+                v_end_time := CURRENT_TIMESTAMP;
+                v_duration := EXTRACT(SECOND FROM (v_end_time - v_start_time));
+                DBMS_OUTPUT.PUT_LINE('Product lookup by SKU (1000 iterations): ' || v_duration || 's');
+                
+                -- Benchmark 2: Active products with inventory
+                v_start_time := CURRENT_TIMESTAMP;
+                FOR i IN 1..100 LOOP
+                    SELECT COUNT(*) INTO v_count 
+                    FROM products 
+                    WHERE is_active = 1 AND quantity_available > 0;
+                END LOOP;
+                v_end_time := CURRENT_TIMESTAMP;
+                v_duration := EXTRACT(SECOND FROM (v_end_time - v_start_time));
+                DBMS_OUTPUT.PUT_LINE('Active products with inventory (100 iterations): ' || v_duration || 's');
+            END benchmark_product_queries;
+        </sql>
+        
+        <rollback>
+            <sql>DROP PROCEDURE benchmark_user_queries</sql>
+            <sql>DROP PROCEDURE benchmark_product_queries</sql>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

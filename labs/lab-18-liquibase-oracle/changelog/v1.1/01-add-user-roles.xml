@@ -1,0 +1,525 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- User Roles and Permissions - Version 1.1 for Oracle Database -->
+    
+    <changeSet id="1.1.1-create-roles-sequence" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sequenceExists sequenceName="roles_seq"/>
+            </not>
+        </preConditions>
+        <comment>Create sequence for roles table primary key.</comment>
+        <createSequence sequenceName="roles_seq" startValue="1" incrementBy="1"/>
+        
+        <rollback>
+            <dropSequence sequenceName="roles_seq"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.2-create-roles-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="roles"/>
+            </not>
+            <sequenceExists sequenceName="roles_seq"/>
+        </preConditions>
+        <comment>
+            Create roles table to manage user permissions and access levels.
+            Demonstrates Oracle RBAC (Role-Based Access Control) implementation.
+        </comment>
+        <createTable tableName="roles">
+            <column name="id" type="NUMBER(19,0)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR2(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="description" type="VARCHAR2(200)"/>
+            <column name="is_active" type="NUMBER(1,0)" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="roles"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.3-create-roles-triggers" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create triggers for roles table auto-increment and timestamp update.</comment>
+        <sql>
+            CREATE OR REPLACE TRIGGER roles_bi_trg
+            BEFORE INSERT ON roles
+            FOR EACH ROW
+            BEGIN
+                IF :NEW.id IS NULL THEN
+                    :NEW.id := roles_seq.NEXTVAL;
+                END IF;
+            END;
+        </sql>
+        
+        <sql>
+            CREATE OR REPLACE TRIGGER roles_bu_trg
+            BEFORE UPDATE ON roles
+            FOR EACH ROW
+            BEGIN
+                :NEW.updated_at := CURRENT_TIMESTAMP;
+            END;
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER roles_bi_trg</sql>
+            <sql>DROP TRIGGER roles_bu_trg</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.4-create-user-roles-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="user_roles"/>
+            </not>
+            <tableExists tableName="users"/>
+            <tableExists tableName="roles"/>
+        </preConditions>
+        <comment>
+            Create user_roles junction table for many-to-many relationship.
+            Demonstrates Oracle composite primary keys and foreign key relationships.
+        </comment>
+        <createTable tableName="user_roles">
+            <column name="user_id" type="NUMBER(19,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role_id" type="NUMBER(19,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="assigned_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="assigned_by" type="NUMBER(19,0)"/>
+            <column name="is_active" type="NUMBER(1,0)" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addPrimaryKey tableName="user_roles" columnNames="user_id,role_id" constraintName="pk_user_roles"/>
+        
+        <addForeignKeyConstraint 
+            baseTableName="user_roles" 
+            baseColumnNames="user_id" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_user_roles_user_id"
+            onDelete="CASCADE"/>
+            
+        <addForeignKeyConstraint 
+            baseTableName="user_roles" 
+            baseColumnNames="role_id" 
+            referencedTableName="roles" 
+            referencedColumnNames="id" 
+            constraintName="fk_user_roles_role_id"
+            onDelete="CASCADE"/>
+            
+        <addForeignKeyConstraint 
+            baseTableName="user_roles" 
+            baseColumnNames="assigned_by" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_user_roles_assigned_by"
+            onDelete="SET NULL"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="user_roles" constraintName="fk_user_roles_user_id"/>
+            <dropForeignKeyConstraint baseTableName="user_roles" constraintName="fk_user_roles_role_id"/>
+            <dropForeignKeyConstraint baseTableName="user_roles" constraintName="fk_user_roles_assigned_by"/>
+            <dropTable tableName="user_roles"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.5-create-permissions-sequence" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sequenceExists sequenceName="permissions_seq"/>
+            </not>
+        </preConditions>
+        <comment>Create sequence for permissions table primary key.</comment>
+        <createSequence sequenceName="permissions_seq" startValue="1" incrementBy="1"/>
+        
+        <rollback>
+            <dropSequence sequenceName="permissions_seq"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.6-create-permissions-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="permissions"/>
+            </not>
+            <sequenceExists sequenceName="permissions_seq"/>
+        </preConditions>
+        <comment>
+            Create permissions table for granular access control.
+            Demonstrates Oracle-specific permission management patterns.
+        </comment>
+        <createTable tableName="permissions">
+            <column name="id" type="NUMBER(19,0)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR2(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="resource" type="VARCHAR2(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action" type="VARCHAR2(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR2(300)"/>
+            <column name="is_active" type="NUMBER(1,0)" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="permissions"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.7-create-permissions-triggers" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create trigger for permissions table auto-increment.</comment>
+        <sql>
+            CREATE OR REPLACE TRIGGER permissions_bi_trg
+            BEFORE INSERT ON permissions
+            FOR EACH ROW
+            BEGIN
+                IF :NEW.id IS NULL THEN
+                    :NEW.id := permissions_seq.NEXTVAL;
+                END IF;
+            END;
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER permissions_bi_trg</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.8-create-role-permissions-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="role_permissions"/>
+            </not>
+            <tableExists tableName="roles"/>
+            <tableExists tableName="permissions"/>
+        </preConditions>
+        <comment>
+            Create role_permissions junction table for role-based permission assignment.
+            Demonstrates Oracle composite relationships and permission inheritance.
+        </comment>
+        <createTable tableName="role_permissions">
+            <column name="role_id" type="NUMBER(19,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="permission_id" type="NUMBER(19,0)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="granted_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="granted_by" type="NUMBER(19,0)"/>
+            <column name="is_active" type="NUMBER(1,0)" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addPrimaryKey tableName="role_permissions" columnNames="role_id,permission_id" constraintName="pk_role_permissions"/>
+        
+        <addForeignKeyConstraint 
+            baseTableName="role_permissions" 
+            baseColumnNames="role_id" 
+            referencedTableName="roles" 
+            referencedColumnNames="id" 
+            constraintName="fk_role_permissions_role_id"
+            onDelete="CASCADE"/>
+            
+        <addForeignKeyConstraint 
+            baseTableName="role_permissions" 
+            baseColumnNames="permission_id" 
+            referencedTableName="permissions" 
+            referencedColumnNames="id" 
+            constraintName="fk_role_permissions_permission_id"
+            onDelete="CASCADE"/>
+            
+        <addForeignKeyConstraint 
+            baseTableName="role_permissions" 
+            baseColumnNames="granted_by" 
+            referencedTableName="users" 
+            referencedColumnNames="id" 
+            constraintName="fk_role_permissions_granted_by"
+            onDelete="SET NULL"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="role_permissions" constraintName="fk_role_permissions_role_id"/>
+            <dropForeignKeyConstraint baseTableName="role_permissions" constraintName="fk_role_permissions_permission_id"/>
+            <dropForeignKeyConstraint baseTableName="role_permissions" constraintName="fk_role_permissions_granted_by"/>
+            <dropTable tableName="role_permissions"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.9-seed-roles-data" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="roles"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM roles</sqlCheck>
+        </preConditions>
+        <comment>Insert initial roles data for Oracle-based RBAC system.</comment>
+        
+        <insert tableName="roles">
+            <column name="name" value="SUPER_ADMIN"/>
+            <column name="description" value="System super administrator with full access to all resources and administrative functions"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="roles">
+            <column name="name" value="ADMIN"/>
+            <column name="description" value="Administrator with access to most system functions except critical system configuration"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="roles">
+            <column name="name" value="MANAGER"/>
+            <column name="description" value="Manager role with access to reports, user management, and business operations"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="roles">
+            <column name="name" value="SALES_REP"/>
+            <column name="description" value="Sales representative with access to orders, customers, and product information"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="roles">
+            <column name="name" value="CUSTOMER"/>
+            <column name="description" value="Standard customer role with access to personal account and order management"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="roles">
+            <column name="name" value="GUEST"/>
+            <column name="description" value="Guest user with limited read-only access to public information"/>
+            <column name="is_active" valueNumeric="1"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="roles">
+                <where>name IN ('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SALES_REP', 'CUSTOMER', 'GUEST')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.10-seed-permissions-data" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="permissions"/>
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM permissions</sqlCheck>
+        </preConditions>
+        <comment>Insert comprehensive permissions data for Oracle-based access control.</comment>
+        
+        <!-- System Administration Permissions -->
+        <insert tableName="permissions">
+            <column name="name" value="SYSTEM_ADMIN"/>
+            <column name="resource" value="SYSTEM"/>
+            <column name="action" value="ADMIN"/>
+            <column name="description" value="Full system administration access including configuration and maintenance"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="USER_MANAGEMENT"/>
+            <column name="resource" value="USERS"/>
+            <column name="action" value="CRUD"/>
+            <column name="description" value="Create, read, update, and delete user accounts and profiles"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="ROLE_MANAGEMENT"/>
+            <column name="resource" value="ROLES"/>
+            <column name="action" value="CRUD"/>
+            <column name="description" value="Manage roles and assign permissions to roles"/>
+        </insert>
+        
+        <!-- Product Management Permissions -->
+        <insert tableName="permissions">
+            <column name="name" value="PRODUCT_CREATE"/>
+            <column name="resource" value="PRODUCTS"/>
+            <column name="action" value="CREATE"/>
+            <column name="description" value="Create new products and add them to the catalog"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="PRODUCT_READ"/>
+            <column name="resource" value="PRODUCTS"/>
+            <column name="action" value="READ"/>
+            <column name="description" value="View product information and catalog details"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="PRODUCT_UPDATE"/>
+            <column name="resource" value="PRODUCTS"/>
+            <column name="action" value="UPDATE"/>
+            <column name="description" value="Modify existing product information and pricing"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="PRODUCT_DELETE"/>
+            <column name="resource" value="PRODUCTS"/>
+            <column name="action" value="DELETE"/>
+            <column name="description" value="Remove products from the catalog and inventory"/>
+        </insert>
+        
+        <!-- Order Management Permissions -->
+        <insert tableName="permissions">
+            <column name="name" value="ORDER_CREATE"/>
+            <column name="resource" value="ORDERS"/>
+            <column name="action" value="CREATE"/>
+            <column name="description" value="Create new orders and process customer purchases"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="ORDER_READ"/>
+            <column name="resource" value="ORDERS"/>
+            <column name="action" value="READ"/>
+            <column name="description" value="View order details and order history"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="ORDER_UPDATE"/>
+            <column name="resource" value="ORDERS"/>
+            <column name="action" value="UPDATE"/>
+            <column name="description" value="Modify order status and update order information"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="ORDER_DELETE"/>
+            <column name="resource" value="ORDERS"/>
+            <column name="action" value="DELETE"/>
+            <column name="description" value="Cancel orders and remove them from the system"/>
+        </insert>
+        
+        <!-- Reporting Permissions -->
+        <insert tableName="permissions">
+            <column name="name" value="REPORTS_VIEW"/>
+            <column name="resource" value="REPORTS"/>
+            <column name="action" value="READ"/>
+            <column name="description" value="Access and view business reports and analytics"/>
+        </insert>
+        
+        <insert tableName="permissions">
+            <column name="name" value="REPORTS_EXPORT"/>
+            <column name="resource" value="REPORTS"/>
+            <column name="action" value="EXPORT"/>
+            <column name="description" value="Export reports and data to external formats"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="permissions">
+                <where>resource IN ('SYSTEM', 'USERS', 'ROLES', 'PRODUCTS', 'ORDERS', 'REPORTS')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.11-assign-roles-to-users" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="user_roles"/>
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM roles WHERE name = 'SUPER_ADMIN'</sqlCheck>
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM users WHERE username = 'admin'</sqlCheck>
+        </preConditions>
+        <comment>Assign roles to existing users based on their intended access levels.</comment>
+        
+        <!-- Assign SUPER_ADMIN role to admin user -->
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'SUPER_ADMIN')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <!-- Assign CUSTOMER role to john_doe -->
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'john_doe')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'CUSTOMER')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <!-- Assign SALES_REP role to jane_smith -->
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'jane_smith')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'SALES_REP')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <!-- Assign MANAGER role to bob_johnson -->
+        <insert tableName="user_roles">
+            <column name="user_id" valueComputed="(SELECT id FROM users WHERE username = 'bob_johnson')"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'MANAGER')"/>
+            <column name="assigned_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="user_roles">
+                <where>user_id IN (SELECT id FROM users WHERE username IN ('admin', 'john_doe', 'jane_smith', 'bob_johnson'))</where>
+            </delete>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.1.12-create-role-permission-indexes" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create indexes for role and permission tables to optimize queries.</comment>
+        
+        <createIndex tableName="roles" indexName="idx_roles_name">
+            <column name="name"/>
+        </createIndex>
+        
+        <createIndex tableName="permissions" indexName="idx_permissions_resource">
+            <column name="resource"/>
+        </createIndex>
+        
+        <createIndex tableName="permissions" indexName="idx_permissions_action">
+            <column name="action"/>
+        </createIndex>
+        
+        <createIndex tableName="user_roles" indexName="idx_user_roles_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        
+        <createIndex tableName="user_roles" indexName="idx_user_roles_role_id">
+            <column name="role_id"/>
+        </createIndex>
+        
+        <createIndex tableName="role_permissions" indexName="idx_role_permissions_role_id">
+            <column name="role_id"/>
+        </createIndex>
+        
+        <createIndex tableName="role_permissions" indexName="idx_role_permissions_permission_id">
+            <column name="permission_id"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="roles" indexName="idx_roles_name"/>
+            <dropIndex tableName="permissions" indexName="idx_permissions_resource"/>
+            <dropIndex tableName="permissions" indexName="idx_permissions_action"/>
+            <dropIndex tableName="user_roles" indexName="idx_user_roles_user_id"/>
+            <dropIndex tableName="user_roles" indexName="idx_user_roles_role_id"/>
+            <dropIndex tableName="role_permissions" indexName="idx_role_permissions_role_id"/>
+            <dropIndex tableName="role_permissions" indexName="idx_role_permissions_permission_id"/>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>

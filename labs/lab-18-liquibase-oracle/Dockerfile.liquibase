@@ -1,0 +1,33 @@
+# Custom Liquibase image with Oracle JDBC driver
+FROM liquibase/liquibase:4.29.2
+
+# Switch to root user to install packages and download drivers
+USER root
+
+# Install necessary tools
+RUN apk add --no-cache curl unzip
+
+# Download Oracle JDBC driver (ojdbc11.jar for Oracle 21c)
+# Using Maven Central repository for the latest Oracle JDBC driver
+RUN curl -L -o /liquibase/lib/ojdbc11.jar \
+    https://repo1.maven.org/maven2/com/oracle/database/jdbc/ojdbc11/23.3.0.23.09/ojdbc11-23.3.0.23.09.jar
+
+# Download additional Oracle libraries for better compatibility
+RUN curl -L -o /liquibase/lib/oraclepki.jar \
+    https://repo1.maven.org/maven2/com/oracle/database/security/oraclepki/23.3.0.23.09/oraclepki-23.3.0.23.09.jar && \
+    curl -L -o /liquibase/lib/osdt_core.jar \
+    https://repo1.maven.org/maven2/com/oracle/database/security/osdt_core/23.3.0.23.09/osdt_core-23.3.0.23.09.jar && \
+    curl -L -o /liquibase/lib/osdt_cert.jar \
+    https://repo1.maven.org/maven2/com/oracle/database/security/osdt_cert/23.3.0.23.09/osdt_cert-23.3.0.23.09.jar
+
+# Set proper permissions for the JAR files
+RUN chmod 644 /liquibase/lib/*.jar
+
+# Switch back to liquibase user
+USER liquibase
+
+# Set working directory
+WORKDIR /liquibase
+
+# Default command
+CMD ["--help"]

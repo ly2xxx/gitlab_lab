@@ -1,0 +1,575 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Advanced Oracle Features - Version 1.2 -->
+    
+    <changeSet id="1.2.1-create-product-categories-sequence" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sequenceExists sequenceName="product_categories_seq"/>
+            </not>
+        </preConditions>
+        <comment>Create sequence for product_categories table.</comment>
+        <createSequence sequenceName="product_categories_seq" startValue="1" incrementBy="1"/>
+        
+        <rollback>
+            <dropSequence sequenceName="product_categories_seq"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.2-create-product-categories-table" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="product_categories"/>
+            </not>
+            <sequenceExists sequenceName="product_categories_seq"/>
+        </preConditions>
+        <comment>
+            Create normalized product categories table with Oracle hierarchical features.
+            Demonstrates Oracle Connect By hierarchical queries and self-referencing foreign keys.
+        </comment>
+        <createTable tableName="product_categories">
+            <column name="id" type="NUMBER(19,0)">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR2(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR2(500)"/>
+            <column name="parent_category_id" type="NUMBER(19,0)"/>
+            <column name="category_path" type="VARCHAR2(1000)"/>
+            <column name="level_depth" type="NUMBER(3,0)" defaultValueNumeric="1"/>
+            <column name="sort_order" type="NUMBER(5,0)" defaultValueNumeric="0"/>
+            <column name="is_active" type="NUMBER(1,0)" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <!-- Self-referencing foreign key for hierarchy -->
+        <addForeignKeyConstraint 
+            baseTableName="product_categories" 
+            baseColumnNames="parent_category_id" 
+            referencedTableName="product_categories" 
+            referencedColumnNames="id" 
+            constraintName="fk_product_categories_parent"
+            onDelete="CASCADE"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="product_categories" constraintName="fk_product_categories_parent"/>
+            <dropTable tableName="product_categories"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.3-create-product-categories-triggers" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create triggers for product categories with hierarchical path management.</comment>
+        <sql>
+            CREATE OR REPLACE TRIGGER product_categories_bi_trg
+            BEFORE INSERT ON product_categories
+            FOR EACH ROW
+            DECLARE
+                v_parent_path VARCHAR2(1000);
+                v_parent_level NUMBER(3,0);
+            BEGIN
+                IF :NEW.id IS NULL THEN
+                    :NEW.id := product_categories_seq.NEXTVAL;
+                END IF;
+                
+                -- Calculate hierarchical path and level
+                IF :NEW.parent_category_id IS NOT NULL THEN
+                    SELECT category_path, level_depth
+                    INTO v_parent_path, v_parent_level
+                    FROM product_categories
+                    WHERE id = :NEW.parent_category_id;
+                    
+                    :NEW.category_path := v_parent_path || '/' || :NEW.name;
+                    :NEW.level_depth := v_parent_level + 1;
+                ELSE
+                    :NEW.category_path := :NEW.name;
+                    :NEW.level_depth := 1;
+                END IF;
+            END;
+        </sql>
+        
+        <sql>
+            CREATE OR REPLACE TRIGGER product_categories_bu_trg
+            BEFORE UPDATE ON product_categories
+            FOR EACH ROW
+            BEGIN
+                :NEW.updated_at := CURRENT_TIMESTAMP;
+                
+                -- Recalculate path if name or parent changed
+                IF :NEW.name != :OLD.name OR :NEW.parent_category_id != :OLD.parent_category_id THEN
+                    IF :NEW.parent_category_id IS NOT NULL THEN
+                        SELECT category_path, level_depth
+                        INTO :NEW.category_path, :NEW.level_depth
+                        FROM product_categories
+                        WHERE id = :NEW.parent_category_id;
+                        
+                        :NEW.category_path := :NEW.category_path || '/' || :NEW.name;
+                        :NEW.level_depth := :NEW.level_depth + 1;
+                    ELSE
+                        :NEW.category_path := :NEW.name;
+                        :NEW.level_depth := 1;
+                    END IF;
+                END IF;
+            END;
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER product_categories_bi_trg</sql>
+            <sql>DROP TRIGGER product_categories_bu_trg</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.4-seed-product-categories" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Insert hierarchical product categories data.</comment>
+        
+        <!-- Root categories -->
+        <insert tableName="product_categories">
+            <column name="name" value="Software"/>
+            <column name="description" value="Software products and licenses"/>
+            <column name="sort_order" valueNumeric="1"/>
+        </insert>
+        
+        <insert tableName="product_categories">
+            <column name="name" value="Cloud Services"/>
+            <column name="description" value="Cloud-based services and subscriptions"/>
+            <column name="sort_order" valueNumeric="2"/>
+        </insert>
+        
+        <insert tableName="product_categories">
+            <column name="name" value="Hardware"/>
+            <column name="description" value="Hardware systems and appliances"/>
+            <column name="sort_order" valueNumeric="3"/>
+        </insert>
+        
+        <insert tableName="product_categories">
+            <column name="name" value="Support Services"/>
+            <column name="description" value="Support and maintenance services"/>
+            <column name="sort_order" valueNumeric="4"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="product_categories"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.5-add-product-category-foreign-key" author="liquibase-oracle-lab" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="products"/>
+            <tableExists tableName="product_categories"/>
+            <not>
+                <columnExists tableName="products" columnName="category_id"/>
+            </not>
+        </preConditions>
+        <comment>Add foreign key relationship between products and categories.</comment>
+        
+        <addColumn tableName="products">
+            <column name="category_id" type="NUMBER(19,0)"/>
+        </addColumn>
+        
+        <addForeignKeyConstraint 
+            baseTableName="products" 
+            baseColumnNames="category_id" 
+            referencedTableName="product_categories" 
+            referencedColumnNames="id" 
+            constraintName="fk_products_category_id"
+            onDelete="SET NULL"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="products" constraintName="fk_products_category_id"/>
+            <dropColumn tableName="products" columnName="category_id"/>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.6-create-oracle-stored-procedures" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create Oracle stored procedures for business logic.
+            Demonstrates PL/SQL procedures, functions, and packages.
+        </comment>
+        
+        <!-- Procedure to calculate order totals -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE calculate_order_total(
+                p_order_id IN NUMBER,
+                p_total OUT NUMBER
+            ) AS
+            BEGIN
+                SELECT SUM(total_price)
+                INTO p_total
+                FROM order_items
+                WHERE order_id = p_order_id;
+                
+                IF p_total IS NULL THEN
+                    p_total := 0;
+                END IF;
+            END calculate_order_total;
+        </sql>
+        
+        <!-- Function to get user's full name -->
+        <sql>
+            CREATE OR REPLACE FUNCTION get_user_full_name(
+                p_user_id IN NUMBER
+            ) RETURN VARCHAR2 AS
+                v_full_name VARCHAR2(200);
+            BEGIN
+                SELECT TRIM(first_name || ' ' || last_name)
+                INTO v_full_name
+                FROM users
+                WHERE id = p_user_id;
+                
+                RETURN v_full_name;
+            EXCEPTION
+                WHEN NO_DATA_FOUND THEN
+                    RETURN 'Unknown User';
+            END get_user_full_name;
+        </sql>
+        
+        <!-- Procedure to update product inventory -->
+        <sql>
+            CREATE OR REPLACE PROCEDURE update_product_inventory(
+                p_product_id IN NUMBER,
+                p_quantity_change IN NUMBER,
+                p_updated_by IN NUMBER DEFAULT NULL
+            ) AS
+                v_current_quantity NUMBER;
+                v_new_quantity NUMBER;
+            BEGIN
+                -- Get current quantity
+                SELECT quantity_available
+                INTO v_current_quantity
+                FROM products
+                WHERE id = p_product_id
+                FOR UPDATE;
+                
+                v_new_quantity := v_current_quantity + p_quantity_change;
+                
+                -- Prevent negative inventory
+                IF v_new_quantity < 0 THEN
+                    RAISE_APPLICATION_ERROR(-20001, 'Insufficient inventory. Available: ' || v_current_quantity);
+                END IF;
+                
+                -- Update the quantity
+                UPDATE products
+                SET quantity_available = v_new_quantity,
+                    updated_by = p_updated_by,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = p_product_id;
+                
+                COMMIT;
+            END update_product_inventory;
+        </sql>
+        
+        <rollback>
+            <sql>DROP PROCEDURE calculate_order_total</sql>
+            <sql>DROP FUNCTION get_user_full_name</sql>
+            <sql>DROP PROCEDURE update_product_inventory</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.7-create-oracle-package" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create Oracle package for order management business logic.
+            Demonstrates Oracle package specification and body.
+        </comment>
+        
+        <!-- Package specification -->
+        <sql>
+            CREATE OR REPLACE PACKAGE order_management AS
+                -- Public procedures and functions
+                PROCEDURE create_order(
+                    p_user_id IN NUMBER,
+                    p_order_number IN VARCHAR2,
+                    p_order_id OUT NUMBER
+                );
+                
+                PROCEDURE add_order_item(
+                    p_order_id IN NUMBER,
+                    p_product_id IN NUMBER,
+                    p_quantity IN NUMBER,
+                    p_unit_price IN NUMBER DEFAULT NULL
+                );
+                
+                FUNCTION get_order_status(
+                    p_order_id IN NUMBER
+                ) RETURN VARCHAR2;
+                
+                PROCEDURE update_order_status(
+                    p_order_id IN NUMBER,
+                    p_new_status IN VARCHAR2
+                );
+                
+                -- Package constants
+                c_status_pending CONSTANT VARCHAR2(20) := 'PENDING';
+                c_status_processing CONSTANT VARCHAR2(20) := 'PROCESSING';
+                c_status_shipped CONSTANT VARCHAR2(20) := 'SHIPPED';
+                c_status_delivered CONSTANT VARCHAR2(20) := 'DELIVERED';
+                c_status_cancelled CONSTANT VARCHAR2(20) := 'CANCELLED';
+            END order_management;
+        </sql>
+        
+        <!-- Package body -->
+        <sql>
+            CREATE OR REPLACE PACKAGE BODY order_management AS
+                
+                PROCEDURE create_order(
+                    p_user_id IN NUMBER,
+                    p_order_number IN VARCHAR2,
+                    p_order_id OUT NUMBER
+                ) AS
+                BEGIN
+                    INSERT INTO orders (user_id, order_number, status, total_amount)
+                    VALUES (p_user_id, p_order_number, c_status_pending, 0)
+                    RETURNING id INTO p_order_id;
+                END create_order;
+                
+                PROCEDURE add_order_item(
+                    p_order_id IN NUMBER,
+                    p_product_id IN NUMBER,
+                    p_quantity IN NUMBER,
+                    p_unit_price IN NUMBER DEFAULT NULL
+                ) AS
+                    v_price NUMBER;
+                    v_total_price NUMBER;
+                    v_order_total NUMBER;
+                BEGIN
+                    -- Get product price if not provided
+                    IF p_unit_price IS NULL THEN
+                        SELECT price INTO v_price
+                        FROM products
+                        WHERE id = p_product_id;
+                    ELSE
+                        v_price := p_unit_price;
+                    END IF;
+                    
+                    v_total_price := p_quantity * v_price;
+                    
+                    -- Insert order item
+                    INSERT INTO order_items (order_id, product_id, quantity, unit_price, total_price)
+                    VALUES (p_order_id, p_product_id, p_quantity, v_price, v_total_price);
+                    
+                    -- Update order total
+                    calculate_order_total(p_order_id, v_order_total);
+                    
+                    UPDATE orders
+                    SET total_amount = v_order_total
+                    WHERE id = p_order_id;
+                    
+                    -- Update product inventory
+                    update_product_inventory(p_product_id, -p_quantity);
+                END add_order_item;
+                
+                FUNCTION get_order_status(
+                    p_order_id IN NUMBER
+                ) RETURN VARCHAR2 AS
+                    v_status VARCHAR2(20);
+                BEGIN
+                    SELECT status
+                    INTO v_status
+                    FROM orders
+                    WHERE id = p_order_id;
+                    
+                    RETURN v_status;
+                EXCEPTION
+                    WHEN NO_DATA_FOUND THEN
+                        RETURN NULL;
+                END get_order_status;
+                
+                PROCEDURE update_order_status(
+                    p_order_id IN NUMBER,
+                    p_new_status IN VARCHAR2
+                ) AS
+                BEGIN
+                    UPDATE orders
+                    SET status = p_new_status,
+                        shipped_date = CASE WHEN p_new_status = c_status_shipped THEN CURRENT_TIMESTAMP ELSE shipped_date END,
+                        delivered_date = CASE WHEN p_new_status = c_status_delivered THEN CURRENT_TIMESTAMP ELSE delivered_date END
+                    WHERE id = p_order_id;
+                    
+                    IF SQL%ROWCOUNT = 0 THEN
+                        RAISE_APPLICATION_ERROR(-20002, 'Order not found: ' || p_order_id);
+                    END IF;
+                END update_order_status;
+                
+            END order_management;
+        </sql>
+        
+        <rollback>
+            <sql>DROP PACKAGE order_management</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.8-create-materialized-view" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create materialized view for order summary reporting.
+            Demonstrates Oracle materialized view capabilities for performance optimization.
+        </comment>
+        <sql>
+            CREATE MATERIALIZED VIEW mv_order_summary
+            BUILD IMMEDIATE
+            REFRESH COMPLETE ON DEMAND
+            AS
+            SELECT 
+                o.id,
+                o.order_number,
+                o.user_id,
+                get_user_full_name(o.user_id) AS customer_name,
+                u.email AS customer_email,
+                o.status,
+                o.order_date,
+                o.total_amount,
+                COUNT(oi.id) AS item_count,
+                SUM(oi.quantity) AS total_quantity
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            LEFT JOIN order_items oi ON o.id = oi.order_id
+            GROUP BY o.id, o.order_number, o.user_id, u.email, o.status, o.order_date, o.total_amount
+        </sql>
+        
+        <rollback>
+            <sql>DROP MATERIALIZED VIEW mv_order_summary</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.9-create-product-search-view" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create view for product search with category information.
+            Demonstrates Oracle view with hierarchical data and complex joins.
+        </comment>
+        <sql>
+            CREATE OR REPLACE VIEW v_product_search AS
+            SELECT 
+                p.id,
+                p.name,
+                p.description,
+                p.sku,
+                p.price,
+                p.quantity_available,
+                p.is_active,
+                pc.name AS category_name,
+                pc.category_path,
+                pc.level_depth AS category_level,
+                CASE 
+                    WHEN p.quantity_available > 100 THEN 'High'
+                    WHEN p.quantity_available > 10 THEN 'Medium'
+                    WHEN p.quantity_available > 0 THEN 'Low'
+                    ELSE 'Out of Stock'
+                END AS inventory_status,
+                p.created_at,
+                p.updated_at
+            FROM products p
+            LEFT JOIN product_categories pc ON p.category_id = pc.id
+        </sql>
+        
+        <rollback>
+            <sql>DROP VIEW v_product_search</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.10-create-oracle-type-and-table-function" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>
+            Create Oracle object type and table function.
+            Demonstrates advanced Oracle type system and pipelined functions.
+        </comment>
+        
+        <!-- Create object type for order item -->
+        <sql>
+            CREATE OR REPLACE TYPE t_order_item AS OBJECT (
+                product_name VARCHAR2(200),
+                sku VARCHAR2(50),
+                quantity NUMBER(10,0),
+                unit_price NUMBER(10,2),
+                total_price NUMBER(12,2)
+            );
+        </sql>
+        
+        <!-- Create collection type -->
+        <sql>
+            CREATE OR REPLACE TYPE t_order_items_tab AS TABLE OF t_order_item;
+        </sql>
+        
+        <!-- Create pipelined table function -->
+        <sql>
+            CREATE OR REPLACE FUNCTION get_order_items(
+                p_order_id IN NUMBER
+            ) RETURN t_order_items_tab PIPELINED AS
+                v_item t_order_item;
+            BEGIN
+                FOR rec IN (
+                    SELECT p.name AS product_name,
+                           p.sku,
+                           oi.quantity,
+                           oi.unit_price,
+                           oi.total_price
+                    FROM order_items oi
+                    JOIN products p ON oi.product_id = p.id
+                    WHERE oi.order_id = p_order_id
+                    ORDER BY oi.id
+                ) LOOP
+                    v_item := t_order_item(
+                        rec.product_name,
+                        rec.sku,
+                        rec.quantity,
+                        rec.unit_price,
+                        rec.total_price
+                    );
+                    PIPE ROW(v_item);
+                END LOOP;
+                RETURN;
+            END get_order_items;
+        </sql>
+        
+        <rollback>
+            <sql>DROP FUNCTION get_order_items</sql>
+            <sql>DROP TYPE t_order_items_tab</sql>
+            <sql>DROP TYPE t_order_item</sql>
+        </rollback>
+    </changeSet>
+    
+    <changeSet id="1.2.11-create-advanced-indexes" author="liquibase-oracle-lab" dbms="oracle">
+        <comment>Create advanced Oracle indexes including function-based and partial indexes.</comment>
+        
+        <!-- Function-based index for product search -->
+        <sql>
+            CREATE INDEX idx_products_name_upper 
+            ON products (UPPER(name))
+        </sql>
+        
+        <!-- Composite index for order queries -->
+        <createIndex tableName="orders" indexName="idx_orders_user_status_date">
+            <column name="user_id"/>
+            <column name="status"/>
+            <column name="order_date"/>
+        </createIndex>
+        
+        <!-- Partial index for active products only -->
+        <sql>
+            CREATE INDEX idx_products_active_category 
+            ON products (category_id, price)
+            WHERE is_active = 1
+        </sql>
+        
+        <createIndex tableName="product_categories" indexName="idx_categories_parent_sort">
+            <column name="parent_category_id"/>
+            <column name="sort_order"/>
+        </createIndex>
+        
+        <rollback>
+            <sql>DROP INDEX idx_products_name_upper</sql>
+            <dropIndex tableName="orders" indexName="idx_orders_user_status_date"/>
+            <sql>DROP INDEX idx_products_active_category</sql>
+            <dropIndex tableName="product_categories" indexName="idx_categories_parent_sort"/>
+        </rollback>
+    </changeSet>
+    
+</databaseChangeLog>
