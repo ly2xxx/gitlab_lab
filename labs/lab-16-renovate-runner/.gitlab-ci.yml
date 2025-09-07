@@ -65,7 +65,7 @@ workflow:
   before_script:
     - echo "Renovate version $(renovate --version)"
     - echo "Running as user $(whoami) in $(pwd)"
-    - echo "GitLab API endpoint: $RENOVATE_ENDPOINT"
+    - echo "GitLab API endpoint - $RENOVATE_ENDPOINT"
   artifacts:
     when: always
     expire_in: 7d
