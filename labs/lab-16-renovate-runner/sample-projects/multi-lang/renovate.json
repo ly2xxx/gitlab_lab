@@ -1,0 +1,204 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Multi-language project Renovate configuration demonstrating complex scenarios",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":separateMajorReleases",
+    "group:monorepos",
+    "group:recommended"
+  ],
+  "labels": ["renovate", "multi-language", "monorepo"],
+  "assignees": ["@full-stack-team"],
+  "reviewers": ["@tech-leads"],
+  "schedule": ["after 10pm every weekday", "every weekend"],
+  "timezone": "UTC",
+  "platformAutomerge": true,
+  "rebaseWhen": "behind-base-branch",
+  "prConcurrentLimit": 8,
+  "branchConcurrentLimit": 8,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "vulnerability"],
+    "assignees": ["@security-team"],
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "description": "Group Node.js frontend dependencies",
+      "matchFiles": ["frontend/package.json", "packages/*/package.json"],
+      "matchDepTypes": ["dependencies", "devDependencies"],
+      "labels": ["frontend", "nodejs"],
+      "assignees": ["@frontend-team"],
+      "reviewers": ["@frontend-team"]
+    },
+    {
+      "description": "Group Python backend dependencies",
+      "matchFiles": ["requirements*.txt", "pyproject.toml"],
+      "labels": ["backend", "python"],
+      "assignees": ["@backend-team"],
+      "reviewers": ["@backend-team"],
+      "rangeStrategy": "pin"
+    },
+    {
+      "description": "Group PHP dependencies", 
+      "matchFiles": ["composer.json"],
+      "labels": ["backend", "php"],
+      "assignees": ["@php-team"],
+      "reviewers": ["@php-team"]
+    },
+    {
+      "description": "Docker base images across all languages",
+      "matchDatasources": ["docker"],
+      "groupName": "Docker base images",
+      "labels": ["docker", "infrastructure"],
+      "assignees": ["@devops-team"],
+      "reviewers": ["@devops-team"],
+      "schedule": ["every weekend"]
+    },
+    {
+      "description": "Workspace root dependencies (build tools, etc.)",
+      "matchFiles": ["package.json"],
+      "matchDepTypes": ["devDependencies"],
+      "labels": ["build-tools", "workspace"],
+      "automerge": true,
+      "groupName": "Workspace build tools"
+    },
+    {
+      "description": "Testing frameworks across languages",
+      "matchPackageNames": [
+        "jest",
+        "pytest", 
+        "phpunit/phpunit",
+        "@testing-library/react",
+        "cypress"
+      ],
+      "groupName": "Testing frameworks",
+      "labels": ["testing"],
+      "automerge": true,
+      "reviewers": ["@qa-team"]
+    },
+    {
+      "description": "Code quality tools across languages",
+      "matchPackageNames": [
+        "eslint",
+        "flake8",
+        "squizlabs/php_codesniffer",
+        "phpstan/phpstan",
+        "black",
+        "prettier"
+      ],
+      "groupName": "Code quality tools",
+      "labels": ["code-quality"],
+      "automerge": true
+    },
+    {
+      "description": "Security libraries require careful review",
+      "matchPackagePatterns": [
+        "*auth*",
+        "*security*",
+        "*crypto*",
+        "*jwt*",
+        "*oauth*",
+        "*bcrypt*"
+      ],
+      "labels": ["security", "critical"],
+      "assignees": ["@security-team"],
+      "reviewers": ["@security-team"],
+      "automerge": false,
+      "schedule": ["at any time"]
+    },
+    {
+      "description": "Database-related packages",
+      "matchPackageNames": [
+        "mysql",
+        "redis",
+        "SQLAlchemy",
+        "doctrine/dbal",
+        "mongoose"
+      ],
+      "groupName": "Database packages",
+      "labels": ["database"],
+      "reviewers": ["@backend-team", "@dba-team"],
+      "automerge": false
+    },
+    {
+      "description": "Major updates require extensive testing across languages",
+      "matchUpdateTypes": ["major"],
+      "labels": ["major-update", "breaking-changes", "extensive-testing"],
+      "assignees": ["@tech-leads"],
+      "reviewers": ["@tech-leads", "@full-stack-team"],
+      "automerge": false,
+      "schedule": ["every weekend"]
+    },
+    {
+      "description": "Auto-merge patch updates for stable packages",
+      "matchUpdateTypes": ["patch"],
+      "excludePackagePatterns": ["*auth*", "*security*", "*crypto*"],
+      "automerge": true,
+      "automergeType": "pr",
+      "labels": ["auto-merge", "patch"]
+    }
+  ],
+  "regexManagers": [
+    {
+      "description": "Multi-language Docker images",
+      "fileMatch": ["(^|/)Dockerfile$", "(^|/)docker-compose\\.ya?ml$"],
+      "matchStrings": [
+        "FROM (?<depName>node|python|php):(?<currentValue>[0-9.]+)"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Version variables in CI configuration",
+      "fileMatch": ["^\\.gitlab-ci\\.ya?ml$"],
+      "matchStrings": [
+        "(?<depName>NODE_VERSION|PYTHON_VERSION|PHP_VERSION):\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Tool versions in scripts",
+      "fileMatch": ["^scripts/.*\\.(sh|py|js)$"],
+      "matchStrings": [
+        "(?<depName>[A-Z_]+)_VERSION=[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "github-releases"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex", 
+      "description": "Kubernetes manifest images",
+      "fileMatch": ["^k8s/.*\\.ya?ml$", "^manifests/.*\\.ya?ml$"],
+      "matchStrings": [
+        "image:\\s*(?<depName>[^:]+):(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    "vendor/**",
+    ".git/**",
+    "**/dist/**",
+    "**/build/**"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"],
+    "commitMessageAction": "Multi-language lock file maintenance",
+    "labels": ["maintenance", "multi-language"]
+  },
+  "enabledManagers": [
+    "npm",
+    "pip_requirements",
+    "pip_setup",
+    "composer",
+    "dockerfile",
+    "docker-compose", 
+    "gitlabci",
+    "regex"
+  ]
+}

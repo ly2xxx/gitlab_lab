@@ -1,0 +1,277 @@
+# Renovate Configuration Validator Template
+# Validates Renovate configuration files in CI/CD pipelines
+# Can be included in projects to ensure config quality
+
+variables:
+  # Validation settings
+  RENOVATE_CONFIG_VALIDATION: 'true'
+  RENOVATE_VALIDATOR_IMAGE: node:18-alpine
+
+stages:
+  - validate
+
+# Configuration validation job
+validate-renovate-config:
+  image: ${RENOVATE_VALIDATOR_IMAGE}
+  stage: validate
+  cache:
+    key: npm-renovate-validator
+    paths:
+      - .npm/
+  before_script:
+    - echo "=== Renovate Configuration Validator ==="
+    - npm config set cache .npm
+    - npm install -g renovate@latest
+    - renovate --version
+  script:
+    - |
+      EXIT_CODE=0
+      
+      echo "Starting configuration validation..."
+      
+      # Function to validate a config file
+      validate_file() {
+        local file="$1"
+        local file_type="$2"
+        
+        echo "Validating $file_type: $file"
+        
+        if [ "$file_type" = "json" ]; then
+          # JSON configuration validation
+          if renovate-config-validator "$file"; then
+            echo "✅ $file is valid"
+            return 0
+          else
+            echo "❌ $file validation failed"
+            return 1
+          fi
+        elif [ "$file_type" = "js" ]; then
+          # JavaScript configuration validation
+          if node -c "$file"; then
+            echo "✅ $file syntax is valid"
+            # Try to load the config
+            if node -e "require('./$file'); console.log('Config loaded successfully')"; then
+              echo "✅ $file configuration is loadable"
+              return 0
+            else
+              echo "❌ $file configuration cannot be loaded"
+              return 1
+            fi
+          else
+            echo "❌ $file syntax check failed"
+            return 1
+          fi
+        fi
+      }
+      
+      # Validate primary configuration files
+      config_files_found=false
+      
+      # Check for renovate.json
+      if [ -f "renovate.json" ]; then
+        config_files_found=true
+        if ! validate_file "renovate.json" "json"; then
+          EXIT_CODE=1
+        fi
+      fi
+      
+      # Check for .renovaterc
+      if [ -f ".renovaterc" ]; then
+        config_files_found=true
+        if ! validate_file ".renovaterc" "json"; then
+          EXIT_CODE=1
+        fi
+      fi
+      
+      # Check for .renovaterc.json
+      if [ -f ".renovaterc.json" ]; then
+        config_files_found=true
+        if ! validate_file ".renovaterc.json" "json"; then
+          EXIT_CODE=1
+        fi
+      fi
+      
+      # Check for config.js
+      if [ -f "config.js" ]; then
+        config_files_found=true
+        if ! validate_file "config.js" "js"; then
+          EXIT_CODE=1
+        fi
+      fi
+      
+      # Check for .renovaterc.js
+      if [ -f ".renovaterc.js" ]; then
+        config_files_found=true
+        if ! validate_file ".renovaterc.js" "js"; then
+          EXIT_CODE=1
+        fi
+      fi
+      
+      # Validate preset files in configs directory
+      if [ -d "configs" ]; then
+        echo "Checking for preset configurations in configs/ directory..."
+        find configs -name "*.json" -type f | while read -r preset_file; do
+          config_files_found=true
+          if ! validate_file "$preset_file" "json"; then
+            EXIT_CODE=1
+          fi
+        done
+      fi
+      
+      # Check for package.json renovate configuration
+      if [ -f "package.json" ]; then
+        if grep -q '"renovate"' package.json; then
+          echo "Found renovate configuration in package.json"
+          config_files_found=true
+          
+          # Extract renovate config and validate it
+          node -e "
+            const pkg = require('./package.json');
+            if (pkg.renovate) {
+              const fs = require('fs');
+              fs.writeFileSync('.renovate-extracted.json', JSON.stringify(pkg.renovate, null, 2));
+              console.log('Extracted renovate config from package.json');
+            }
+          "
+          
+          if [ -f ".renovate-extracted.json" ]; then
+            if ! validate_file ".renovate-extracted.json" "json"; then
+              EXIT_CODE=1
+            fi
+            rm -f ".renovate-extracted.json"
+          fi
+        fi
+      fi
+      
+      # Generate validation report
+      if [ "$config_files_found" = true ]; then
+        echo "Configuration validation completed"
+        if [ $EXIT_CODE -eq 0 ]; then
+          echo "✅ All configuration files are valid"
+        else
+          echo "❌ Some configuration files have validation errors"
+        fi
+      else
+        echo "⚠️  No Renovate configuration files found"
+        echo "Consider adding a renovate.json file for dependency automation"
+        # Don't fail if no config files found
+      fi
+      
+      # Generate JUnit report
+      cat > validation-report.xml << EOF
+      <?xml version="1.0" encoding="UTF-8"?>
+      <testsuite name="renovate-config-validation" tests="1" failures="$([ $EXIT_CODE -eq 0 ] && echo 0 || echo 1)" errors="0" time="$(date +%s)">
+        <testcase name="configuration-validation" classname="renovate.config">
+          $([ $EXIT_CODE -eq 0 ] && echo '' || echo '<failure message="Configuration validation failed">Configuration files contain validation errors</failure>')
+        </testcase>
+      </testsuite>
+      EOF
+      
+      exit $EXIT_CODE
+  artifacts:
+    when: always
+    expire_in: 30d
+    paths:
+      - validation-report.xml
+    reports:
+      junit: validation-report.xml
+  rules:
+    # Run on configuration file changes
+    - changes:
+        - renovate.json
+        - .renovaterc*
+        - config.js
+        - configs/**/*.json
+        - package.json
+    # Run on merge requests
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    # Run on scheduled pipelines
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    # Manual execution
+    - when: manual
+      allow_failure: true
+
+# Advanced validation with schema checking
+validate-renovate-advanced:
+  image: ${RENOVATE_VALIDATOR_IMAGE}
+  stage: validate
+  cache:
+    key: npm-renovate-validator-advanced
+    paths:
+      - .npm/
+  before_script:
+    - npm config set cache .npm
+    - npm install -g renovate@latest ajv-cli
+  script:
+    - |
+      echo "=== Advanced Renovate Configuration Validation ==="
+      
+      # Download Renovate schema
+      curl -o renovate-schema.json https://docs.renovatebot.com/renovate-schema.json
+      
+      # Validate against schema
+      for config_file in renovate.json .renovaterc .renovaterc.json; do
+        if [ -f "$config_file" ]; then
+          echo "Schema validation for $config_file"
+          if ajv validate -s renovate-schema.json -d "$config_file"; then
+            echo "✅ $config_file passes schema validation"
+          else
+            echo "❌ $config_file fails schema validation"
+            exit 1
+          fi
+        fi
+      done
+      
+      echo "Advanced validation completed successfully"
+  rules:
+    - when: manual
+      allow_failure: true
+
+# Configuration linting
+lint-renovate-config:
+  image: ${RENOVATE_VALIDATOR_IMAGE}
+  stage: validate
+  script:
+    - |
+      echo "=== Renovate Configuration Linting ==="
+      
+      # Check for common configuration issues
+      EXIT_CODE=0
+      
+      for config_file in renovate.json .renovaterc .renovaterc.json; do
+        if [ -f "$config_file" ]; then
+          echo "Linting $config_file for common issues..."
+          
+          # Check for deprecated options
+          if grep -q '"automergeType"' "$config_file"; then
+            echo "⚠️  Warning: 'automergeType' is deprecated, use 'automergeStrategy' instead"
+          fi
+          
+          if grep -q '"masterIssue"' "$config_file"; then
+            echo "⚠️  Warning: 'masterIssue' is deprecated, use 'dependencyDashboard' instead"
+          fi
+          
+          # Check for potentially problematic settings
+          if grep -q '"requireConfig": false' "$config_file"; then
+            echo "⚠️  Warning: 'requireConfig: false' can be dangerous in autodiscovery mode"
+          fi
+          
+          # Check for missing important settings
+          if ! grep -q '"schedule"' "$config_file"; then
+            echo "💡 Suggestion: Consider adding a schedule to control when updates run"
+          fi
+          
+          if ! grep -q '"labels"' "$config_file"; then
+            echo "💡 Suggestion: Consider adding labels to categorize dependency updates"
+          fi
+        fi
+      done
+      
+      echo "Configuration linting completed"
+      exit $EXIT_CODE
+  rules:
+    - changes:
+        - renovate.json
+        - .renovaterc*
+    - when: manual
+      allow_failure: true

@@ -1,0 +1,37 @@
+{
+    "name": "renovate-test/multi-lang",
+    "description": "PHP component of multi-language Renovate test project",
+    "type": "project",
+    "require": {
+        "php": "^7.4 || ^8.0",
+        "symfony/console": "^5.4",
+        "doctrine/dbal": "^3.5",
+        "monolog/monolog": "^2.8",
+        "guzzlehttp/guzzle": "^7.5"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.5",
+        "squizlabs/php_codesniffer": "^3.7",
+        "phpstan/phpstan": "^1.9"
+    },
+    "autoload": {
+        "psr-4": {
+            "RenovateTest\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "RenovateTest\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "lint": "phpcs --standard=PSR12 src/ tests/",
+        "analyze": "phpstan analyse src/"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

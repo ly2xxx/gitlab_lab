@@ -1,0 +1,107 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate configuration for Node.js sample project",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard", 
+    ":semanticCommits",
+    ":separateMajorReleases"
+  ],
+  "labels": ["renovate", "nodejs", "dependencies"],
+  "assignees": ["@nodejs-team"],
+  "reviewers": ["@tech-leads"],
+  "schedule": ["after 10pm every weekday", "every weekend"],
+  "timezone": "UTC",
+  "platformAutomerge": true,
+  "rebaseWhen": "behind-base-branch",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "vulnerability"],
+    "assignees": ["@security-team"],
+    "schedule": ["at any time"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"]
+  },
+  "packageRules": [
+    {
+      "description": "Auto-merge devDependencies minor/patch updates",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "labels": ["auto-merge", "dev-deps"]
+    },
+    {
+      "description": "Security packages get immediate attention",
+      "matchPackageNames": [
+        "helmet",
+        "bcryptjs", 
+        "jsonwebtoken",
+        "validator",
+        "eslint-plugin-security"
+      ],
+      "labels": ["security"],
+      "schedule": ["at any time"],
+      "assignees": ["@security-team"],
+      "automerge": false
+    },
+    {
+      "description": "Express framework updates",
+      "matchPackageNames": ["express"],
+      "labels": ["framework", "express"],
+      "reviewers": ["@backend-team"],
+      "automerge": false
+    },
+    {
+      "description": "Testing framework updates",
+      "matchPackageNames": ["jest", "supertest"],
+      "groupName": "Testing frameworks",
+      "labels": ["testing"],
+      "automerge": true
+    },
+    {
+      "description": "Linting and code quality tools",
+      "matchPackagePatterns": ["^eslint"],
+      "groupName": "ESLint and plugins", 
+      "labels": ["linting"],
+      "automerge": true
+    },
+    {
+      "description": "Utility libraries can be auto-merged for minor updates",
+      "matchPackageNames": ["lodash", "uuid", "dotenv"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "labels": ["utilities"]
+    },
+    {
+      "description": "HTTP client updates need testing",
+      "matchPackageNames": ["axios"],
+      "labels": ["http-client"],
+      "reviewers": ["@api-team"],
+      "automerge": false
+    },
+    {
+      "description": "Major updates require careful review",
+      "matchUpdateTypes": ["major"],
+      "labels": ["major-update", "breaking-changes"],
+      "assignees": ["@tech-leads"],
+      "reviewers": ["@tech-leads", "@nodejs-team"],
+      "automerge": false
+    }
+  ],
+  "regexManagers": [
+    {
+      "description": "Node version in Dockerfile",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "FROM node:(?<currentValue>[0-9.]+)"
+      ],
+      "depNameTemplate": "node",
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "prConcurrentLimit": 5,
+  "branchConcurrentLimit": 5
+}

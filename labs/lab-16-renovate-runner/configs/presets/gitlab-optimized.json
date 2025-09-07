@@ -1,0 +1,195 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "GitLab-optimized Renovate preset for maximum integration",
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": [
+    "renovate",
+    "dependencies", 
+    "gitlab-ci"
+  ],
+  "assigneesFromCodeOwners": true,
+  "reviewersFromCodeOwners": true,
+  "platformAutomerge": true,
+  "gitlabAutomerge": true,
+  "includeForks": false,
+  "forkProcessing": "disabled",
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "🔧 GitLab Dependency Dashboard",
+  "dependencyDashboardHeader": "This issue provides visibility into Renovate updates and their status for this GitLab project.",
+  "dependencyDashboardFooter": "Configure using renovate.json in your repository root.",
+  "schedule": [
+    "after 10pm every weekday",
+    "before 5am every weekday",
+    "every weekend"
+  ],
+  "timezone": "UTC",
+  "semanticCommits": "enabled",
+  "commitMessagePrefix": "chore(deps):",
+  "branchPrefix": "renovate/",
+  "rebaseWhen": "behind-base-branch",
+  "prConcurrentLimit": 10,
+  "branchConcurrentLimit": 10,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "labels": ["security", "vulnerability"]
+  },
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"],
+    "commitMessageAction": "Lock file maintenance"
+  },
+  "packageRules": [
+    {
+      "description": "GitLab CI/CD templates and includes",
+      "matchFileNames": [
+        "**/.gitlab-ci.yml",
+        "**/ci/*.yml",
+        "**/templates/*.yml"
+      ],
+      "labels": ["gitlab-ci", "infrastructure"],
+      "reviewers": ["@devops"],
+      "schedule": ["every weekend"],
+      "automerge": false
+    },
+    {
+      "description": "Auto-merge minor and patch updates for GitLab CI images",
+      "matchFileNames": ["**/.gitlab-ci.yml"],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "labels": ["gitlab-ci", "docker", "auto-merge"]
+    },
+    {
+      "description": "GitLab Runner and related tooling",
+      "matchPackageNames": [
+        "gitlab-runner",
+        "gitlab-ci-multi-runner"
+      ],
+      "labels": ["gitlab", "infrastructure"],
+      "reviewers": ["@devops"],
+      "automerge": false
+    },
+    {
+      "description": "Security scanning tools used in GitLab CI",
+      "matchPackageNames": [
+        "gitleaks",
+        "semgrep",
+        "trivy",
+        "clair",
+        "anchore-cli"
+      ],
+      "groupName": "Security scanning tools",
+      "labels": ["security", "gitlab-ci"],
+      "reviewers": ["@security"],
+      "schedule": ["at any time"]
+    },
+    {
+      "description": "GitLab API and SDK packages", 
+      "matchPackagePatterns": [
+        "^gitlab",
+        "^python-gitlab",
+        "^@gitbeaker/",
+        "^gitlab-api"
+      ],
+      "groupName": "GitLab API packages",
+      "labels": ["gitlab", "api"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Container registry and Docker-related updates",
+      "matchDatasources": ["docker"],
+      "matchDepTypes": ["final-stage"],
+      "labels": ["docker", "container-registry"],
+      "schedule": ["every weekend"],
+      "groupName": "Container base images"
+    },
+    {
+      "description": "GitLab Pages dependencies",
+      "matchFileNames": [
+        "**/public/**",
+        "**/.gitlab-ci.yml"
+      ],
+      "matchPackagePatterns": [
+        "^hugo",
+        "^jekyll",
+        "^gatsby",
+        "^@docusaurus/"
+      ],
+      "labels": ["gitlab-pages", "documentation"],
+      "groupName": "GitLab Pages tools"
+    },
+    {
+      "description": "Kubernetes and Helm charts for GitLab deployments",
+      "matchDatasources": ["helm", "kubernetes"],
+      "matchPackagePatterns": [
+        "^gitlab/",
+        "^gitlab-runner"
+      ],
+      "labels": ["kubernetes", "helm", "gitlab"],
+      "reviewers": ["@devops", "@sre"],
+      "automerge": false
+    }
+  ],
+  "regexManagers": [
+    {
+      "description": "GitLab CI image versions in .gitlab-ci.yml",
+      "fileMatch": ["^\\.gitlab-ci\\.ya?ml$"],
+      "matchStrings": [
+        "image:\\s*(?<depName>[^:\\s]+):(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "GitLab CI includes with version tags",
+      "fileMatch": ["^\\.gitlab-ci\\.ya?ml$"],
+      "matchStrings": [
+        "include:\\s*-\\s*project:\\s*[\"'](?<depName>[^\"']+)[\"']\\s*file:\\s*[\"'][^\"']*[\"']\\s*ref:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "gitlab-tags"
+    },
+    {
+      "description": "Version variables in GitLab CI",
+      "fileMatch": ["^\\.gitlab-ci\\.ya?ml$"],
+      "matchStrings": [
+        "(?<depName>[A-Z_]+)_VERSION:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "Helm chart versions in GitLab CI",
+      "fileMatch": ["^\\.gitlab-ci\\.ya?ml$"],
+      "matchStrings": [
+        "helm\\s+upgrade.*--version\\s+(?<currentValue>[0-9.]+).*?(?<depName>[a-z-]+)"
+      ],
+      "datasourceTemplate": "helm"
+    }
+  ],
+  "hostRules": [
+    {
+      "description": "GitLab container registry authentication",
+      "matchHost": "registry.gitlab.com",
+      "hostType": "docker"
+    },
+    {
+      "description": "Optimize timeouts for GitLab API calls", 
+      "matchHost": "gitlab.com",
+      "timeout": 30000
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "GitLab Terraform modules",
+      "fileMatch": ["^.*\\.tf$"],
+      "matchStrings": [
+        "source\\s*=\\s*[\"']gitlab\\.com/(?<depName>[^/]+/[^/]+)[\"'].*?version\\s*=\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "gitlab-releases"
+    }
+  ]
+}

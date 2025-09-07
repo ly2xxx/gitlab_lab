@@ -1,0 +1,192 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate configuration for Python sample project",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits", 
+    ":separateMajorReleases",
+    ":combinePatchMinorReleases"
+  ],
+  "labels": ["renovate", "python", "dependencies"],
+  "assignees": ["@python-team"],
+  "reviewers": ["@tech-leads"],
+  "schedule": ["after 10pm every weekday", "every weekend"],
+  "timezone": "UTC",
+  "platformAutomerge": true,
+  "rebaseWhen": "behind-base-branch",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "vulnerability"],
+    "assignees": ["@security-team"],
+    "schedule": ["at any time"]
+  },
+  "lockFileMaintenance": {
+    "enabled": false,
+    "description": "Python doesn't typically use lock files like package-lock.json"
+  },
+  "packageRules": [
+    {
+      "description": "Pin Python dependencies for stability",
+      "matchLanguages": ["python"],
+      "rangeStrategy": "pin",
+      "labels": ["python", "pinned"]
+    },
+    {
+      "description": "Auto-merge dev dependencies minor/patch updates",
+      "matchFiles": ["requirements-dev.txt", "dev-requirements.txt"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "labels": ["auto-merge", "dev-deps"]
+    },
+    {
+      "description": "Testing framework updates",
+      "matchPackageNames": [
+        "pytest",
+        "pytest-cov",
+        "pytest-mock",
+        "httpx"
+      ],
+      "groupName": "Testing frameworks",
+      "labels": ["testing"],
+      "automerge": true
+    },
+    {
+      "description": "Code quality tools",
+      "matchPackageNames": [
+        "black",
+        "isort", 
+        "flake8",
+        "mypy",
+        "pre-commit"
+      ],
+      "groupName": "Code quality tools",
+      "labels": ["code-quality"],
+      "automerge": true
+    },
+    {
+      "description": "Security packages need careful review",
+      "matchPackageNames": [
+        "cryptography",
+        "PyJWT",
+        "bcrypt",
+        "passlib"
+      ],
+      "labels": ["security"],
+      "schedule": ["at any time"],
+      "assignees": ["@security-team"],
+      "automerge": false
+    },
+    {
+      "description": "Web framework updates",
+      "matchPackageNames": ["Flask", "Werkzeug", "Jinja2"],
+      "groupName": "Flask framework",
+      "labels": ["framework", "flask"],
+      "reviewers": ["@backend-team"],
+      "automerge": false
+    },
+    {
+      "description": "Database-related packages",
+      "matchPackageNames": [
+        "SQLAlchemy",
+        "psycopg2-binary",
+        "PyMySQL",
+        "redis"
+      ],
+      "groupName": "Database packages",
+      "labels": ["database"],
+      "reviewers": ["@backend-team"],
+      "automerge": false
+    },
+    {
+      "description": "HTTP and networking libraries",
+      "matchPackageNames": [
+        "requests",
+        "urllib3",
+        "httpx",
+        "aiohttp"
+      ],
+      "groupName": "HTTP libraries",
+      "labels": ["networking"],
+      "reviewers": ["@api-team"]
+    },
+    {
+      "description": "Production server and deployment",
+      "matchPackageNames": [
+        "gunicorn",
+        "uwsgi",
+        "supervisor"
+      ],
+      "labels": ["production", "deployment"],
+      "reviewers": ["@devops-team"],
+      "automerge": false
+    },
+    {
+      "description": "Monitoring and observability",
+      "matchPackageNames": [
+        "prometheus-client",
+        "structlog",
+        "sentry-sdk"
+      ],
+      "groupName": "Monitoring tools",
+      "labels": ["monitoring"],
+      "reviewers": ["@sre-team"]
+    },
+    {
+      "description": "Major version updates require extensive testing",
+      "matchUpdateTypes": ["major"],
+      "labels": ["major-update", "breaking-changes"],
+      "assignees": ["@tech-leads"],
+      "reviewers": ["@tech-leads", "@python-team"],
+      "automerge": false,
+      "schedule": ["every weekend"]
+    }
+  ],
+  "regexManagers": [
+    {
+      "description": "Python version in Dockerfile",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "FROM python:(?<currentValue>[0-9.]+)"
+      ],
+      "depNameTemplate": "python",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Python version in GitHub Actions",
+      "fileMatch": ["^\\.github/workflows/.*\\.ya?ml$"],
+      "matchStrings": [
+        "python-version: [\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "depNameTemplate": "python",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "Python version in pyproject.toml",
+      "fileMatch": ["(^|/)pyproject\\.toml$"],
+      "matchStrings": [
+        "requires-python = [\"']>=(?<currentValue>[^\"']+)[\"']"
+      ],
+      "depNameTemplate": "python",
+      "datasourceTemplate": "github-releases"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update pip in Docker files",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "pip install.*pip==(?<currentValue>[0-9.]+)"
+      ],
+      "depNameTemplate": "pip",
+      "datasourceTemplate": "pypi"
+    }
+  ],
+  "python": {
+    "installRequirement": true
+  },
+  "prConcurrentLimit": 5,
+  "branchConcurrentLimit": 5
+}

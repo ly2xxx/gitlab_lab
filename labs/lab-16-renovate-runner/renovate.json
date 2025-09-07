@@ -1,0 +1,243 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "GitLab Renovate Runner - Repository Configuration Example",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":separateMajorReleases",
+    "group:monorepos",
+    "group:recommended"
+  ],
+  "platform": "gitlab",
+  "gitlabUrl": "https://gitlab.example.com",
+  "autodiscover": true,
+  "autodiscoverFilter": "group/*",
+  "onboarding": true,
+  "requireConfig": "optional",
+  "dryRun": null,
+  "gitAuthor": "Renovate Bot <renovate@example.com>",
+  "timezone": "UTC",
+  "schedule": [
+    "after 10pm every weekday",
+    "before 5am every weekday", 
+    "every weekend"
+  ],
+  "labels": [
+    "renovate",
+    "dependencies"
+  ],
+  "assignees": [],
+  "reviewers": [],
+  "platformAutomerge": true,
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "🤖 Dependency Dashboard",
+  "dependencyDashboardHeader": "This dashboard shows all dependency updates for this repository. Check the logs for more details on any failures.",
+  "dependencyDashboardFooter": "💡 Configure Renovate by editing `renovate.json` or adding a `.renovaterc` file.",
+  "prConcurrentLimit": 10,
+  "branchConcurrentLimit": 10,
+  "prHourlyLimit": 2,
+  "rebaseWhen": "behind-base-branch",
+  "semanticCommits": "enabled",
+  "commitMessagePrefix": "chore(deps):",
+  "commitMessageAction": "update",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "to {{newVersion}}",
+  "branchPrefix": "renovate/",
+  "includeForks": false,
+  "forkProcessing": "disabled",
+  "repositoryCache": "enabled",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "labels": ["security", "vulnerability"],
+    "assignees": ["@security-team"],
+    "reviewers": ["@security-team"]
+  },
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"],
+    "commitMessageAction": "Lock file maintenance",
+    "branchTopic": "lock-file-maintenance",
+    "labels": ["maintenance"]
+  },
+  "packageRules": [
+    {
+      "description": "Auto-merge non-major updates during off-hours",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "schedule": ["after 10pm", "before 5am", "every weekend"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "labels": ["auto-merge"]
+    },
+    {
+      "description": "Group security updates for immediate attention",
+      "matchPackageNames": ["/security/", "/vulnerability/"],
+      "groupName": "Security updates",
+      "schedule": ["at any time"],
+      "labels": ["security", "high-priority"],
+      "assignees": ["@security-team"],
+      "reviewers": ["@security-team"],
+      "automerge": false
+    },
+    {
+      "description": "Major updates require manual review",
+      "matchUpdateTypes": ["major"],
+      "labels": ["major-update", "needs-review"],
+      "reviewers": ["@team-leads"],
+      "automerge": false,
+      "schedule": ["every weekend"]
+    },
+    {
+      "description": "Development dependencies - less critical",
+      "matchDepTypes": ["devDependencies"],
+      "labels": ["dev-deps"],
+      "schedule": ["every weekend"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Production dependencies - careful handling",
+      "matchDepTypes": ["dependencies", "require"],
+      "labels": ["prod-deps", "needs-review"],
+      "reviewers": ["@maintainers"],
+      "schedule": ["every weekend"],
+      "automerge": false
+    },
+    {
+      "description": "Docker base images",
+      "matchDatasources": ["docker"],
+      "groupName": "Docker base images",
+      "schedule": ["every weekend"],
+      "labels": ["docker"],
+      "reviewers": ["@devops-team"],
+      "automerge": false
+    },
+    {
+      "description": "Node.js version updates",
+      "matchPackageNames": ["node"],
+      "matchDatasources": ["docker", "github-releases"],
+      "groupName": "Node.js version",
+      "schedule": ["every weekend"],
+      "labels": ["nodejs", "runtime"],
+      "reviewers": ["@tech-leads"],
+      "automerge": false
+    },
+    {
+      "description": "Group ESLint-related packages",
+      "matchPackageNames": ["eslint"],
+      "matchPackagePatterns": ["^eslint-", "^@typescript-eslint/"],
+      "groupName": "ESLint and plugins",
+      "labels": ["linting"],
+      "schedule": ["every weekend"]
+    },
+    {
+      "description": "Group testing frameworks",
+      "matchPackagePatterns": ["jest", "mocha", "chai", "sinon", "cypress", "playwright"],
+      "groupName": "Testing frameworks",
+      "labels": ["testing"],
+      "schedule": ["every weekend"],
+      "automerge": true
+    },
+    {
+      "description": "Pin digest updates for Docker",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["digest"],
+      "pinDigests": true,
+      "automerge": true
+    },
+    {
+      "description": "Limit Python package updates to stable versions",
+      "matchLanguages": ["python"],
+      "rangeStrategy": "pin",
+      "labels": ["python"]
+    },
+    {
+      "description": "Group GitLab CI/CD templates",
+      "matchFileNames": ["**/.gitlab-ci.yml", "**/ci/*.yml"],
+      "groupName": "GitLab CI templates",
+      "labels": ["ci-cd"],
+      "reviewers": ["@devops-team"]
+    }
+  ],
+  "regexManagers": [
+    {
+      "description": "Update Docker images in docker-compose files",
+      "fileMatch": ["(^|/)docker-compose\\.ya?ml$"],
+      "matchStrings": [
+        "image:\\s*(?<depName>[^:]+):(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Update versions in Dockerfile FROM statements",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "FROM (?<depName>[^:]+):(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Update GitLab CI/CD image versions",
+      "fileMatch": ["^\\.gitlab-ci\\.yml$", "^ci/.*\\.ya?ml$"],
+      "matchStrings": [
+        "image:\\s*(?<depName>[^:]+):(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update version variables in shell scripts",
+      "fileMatch": ["^scripts/.*\\.sh$"],
+      "matchStrings": [
+        "(?<depName>[A-Z_]+)_VERSION=[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "{{#if (containsString depName 'NODEJS')}}nodejs/node{{else}}{{depName}}{{/if}}"
+    }
+  ],
+  "hostRules": [
+    {
+      "description": "Increase timeout for slow registries",
+      "matchHost": "registry.npmjs.org",
+      "timeout": 30000
+    },
+    {
+      "description": "Private registry authentication (if needed)",
+      "matchHost": "registry.example.com",
+      "hostType": "npm",
+      "encrypted": {
+        "token": "your-encrypted-token-here"
+      }
+    }
+  ],
+  "ignoreDeps": [
+    "some-problematic-package",
+    "legacy-dependency"
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    "vendor/**",
+    "**/test/**",
+    "examples/**"
+  ],
+  "enabledManagers": [
+    "npm",
+    "dockerfile",
+    "docker-compose",
+    "pip_requirements",
+    "pip_setup",
+    "pipenv",
+    "poetry",
+    "gitlabci",
+    "regex",
+    "custom.regex"
+  ],
+  "logLevel": "info",
+  "logFile": "renovate.log",
+  "logFileLevel": "debug"
+}

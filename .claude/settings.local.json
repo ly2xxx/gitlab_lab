@@ -36,7 +36,9 @@
       "WebSearch",
       "WebFetch(domain:about.gitlab.com)",
       "WebFetch(domain:forum.gitlab.com)",
-      "WebFetch(domain:stackoverflow.com)"
+      "WebFetch(domain:stackoverflow.com)",
+      "WebFetch(domain:gitlab.com)",
+      "WebFetch(domain:docs.renovatebot.com)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

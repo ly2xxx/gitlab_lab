@@ -1,0 +1,298 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Security-focused Renovate preset with vulnerability management",
+  "extends": [
+    "config:recommended",
+    ":maintainLockFilesWeekly", 
+    ":separateMajorReleases",
+    ":combinePatchMinorReleases"
+  ],
+  "labels": [
+    "renovate",
+    "security",
+    "dependencies"
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "labels": ["security", "vulnerability", "critical"],
+    "assignees": ["@security-team"],
+    "reviewers": ["@security-team", "@maintainers"],
+    "automerge": false,
+    "groupName": "Security vulnerabilities"
+  },
+  "osvVulnerabilityAlerts": true,
+  "schedule": [
+    "at any time"
+  ],
+  "timezone": "UTC", 
+  "semanticCommits": "enabled",
+  "commitMessagePrefix": "security(deps):",
+  "branchPrefix": "security/renovate/",
+  "rebaseWhen": "behind-base-branch",
+  "prConcurrentLimit": 20,
+  "branchConcurrentLimit": 20,
+  "prHourlyLimit": 10,
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "🔐 Security Dependency Dashboard",
+  "dependencyDashboardHeader": "This dashboard tracks security-related dependency updates. All vulnerability alerts are processed with high priority.",
+  "dependencyDashboardFooter": "🛡️ Security updates are processed immediately when detected.",
+  "packageRules": [
+    {
+      "description": "Critical security updates - immediate processing",
+      "matchPackagePatterns": ["*"],
+      "vulnerabilityAlerts": {
+        "enabled": true
+      },
+      "schedule": ["at any time"],
+      "labels": ["security", "critical", "immediate"],
+      "assignees": ["@security-team"],
+      "reviewers": ["@security-team"],
+      "automerge": false,
+      "groupName": "🚨 Critical Security Updates"
+    },
+    {
+      "description": "Security-related packages get priority",
+      "matchPackagePatterns": [
+        "*security*",
+        "*auth*",
+        "*crypto*",
+        "*ssl*",
+        "*tls*",
+        "*certificate*",
+        "*oauth*",
+        "*jwt*",
+        "*encrypt*",
+        "*hash*",
+        "*password*",
+        "*session*",
+        "*cors*",
+        "*helmet*",
+        "*csrf*",
+        "*xss*",
+        "*sanitize*"
+      ],
+      "labels": ["security", "auth", "crypto"],
+      "schedule": ["at any time"],
+      "automerge": false,
+      "assignees": ["@security-team"],
+      "reviewers": ["@security-team", "@tech-leads"]
+    },
+    {
+      "description": "Known vulnerable packages - force updates",
+      "matchPackageNames": [
+        "lodash",
+        "moment",
+        "axios",
+        "express",
+        "react",
+        "angular",
+        "jquery",
+        "bootstrap",
+        "webpack",
+        "babel-core",
+        "handlebars",
+        "marked",
+        "tar",
+        "node-fetch",
+        "request",
+        "ws"
+      ],
+      "labels": ["security", "known-vulnerabilities"],
+      "schedule": ["at any time"],
+      "automerge": false,
+      "assignees": ["@security-team"]
+    },
+    {
+      "description": "Security scanning and analysis tools",
+      "matchPackageNames": [
+        "eslint-plugin-security",
+        "bandit",
+        "safety", 
+        "snyk",
+        "audit-ci",
+        "npm-audit",
+        "yarn-audit",
+        "retire",
+        "nsp",
+        "david",
+        "gitleaks",
+        "truffleHog",
+        "semgrep",
+        "codeql",
+        "sonarqube",
+        "veracode",
+        "checkmarx"
+      ],
+      "groupName": "Security scanning tools",
+      "labels": ["security", "tools", "scanning"],
+      "schedule": ["at any time"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Container security scanners",
+      "matchPackageNames": [
+        "trivy",
+        "clair",
+        "anchore-cli",
+        "twistcli",
+        "aquasec",
+        "falco",
+        "docker-bench-security"
+      ],
+      "groupName": "Container security tools", 
+      "labels": ["security", "containers", "docker"],
+      "schedule": ["at any time"],
+      "automerge": true
+    },
+    {
+      "description": "Web application security libraries",
+      "matchPackagePatterns": [
+        "^helmet",
+        "^express-rate-limit",
+        "^express-validator",
+        "^csurf",
+        "^express-session",
+        "^passport",
+        "^bcrypt",
+        "^argon2",
+        "^scrypt",
+        "^jsonwebtoken",
+        "^node-jose",
+        "^cors"
+      ],
+      "groupName": "Web security libraries",
+      "labels": ["security", "web", "middleware"],
+      "schedule": ["at any time"],
+      "automerge": false,
+      "reviewers": ["@security-team", "@backend-team"]
+    },
+    {
+      "description": "Cryptographic libraries require careful review",
+      "matchPackagePatterns": [
+        "^crypto",
+        "^node-forge",
+        "^jsrsasign",
+        "^elliptic",
+        "^secp256k1",
+        "^tweetnacl",
+        "^sodium",
+        "^openpgp"
+      ],
+      "labels": ["security", "cryptography", "critical"],
+      "schedule": ["at any time"],
+      "automerge": false,
+      "assignees": ["@security-team", "@crypto-experts"],
+      "reviewers": ["@security-team", "@crypto-experts"],
+      "groupName": "⚠️ Cryptographic libraries"
+    },
+    {
+      "description": "Major version updates require security review",
+      "matchUpdateTypes": ["major"],
+      "labels": ["security", "major-update", "breaking-changes"],
+      "automerge": false,
+      "assignees": ["@security-team"],
+      "reviewers": ["@security-team", "@tech-leads"],
+      "schedule": ["every weekend"]
+    },
+    {
+      "description": "Pin security-critical dependencies",
+      "matchPackagePatterns": [
+        "*auth*",
+        "*crypto*", 
+        "*security*",
+        "*ssl*",
+        "*tls*"
+      ],
+      "rangeStrategy": "pin",
+      "labels": ["security", "pinned"]
+    },
+    {
+      "description": "Test and development security tools",
+      "matchDepTypes": ["devDependencies"],
+      "matchPackagePatterns": [
+        "*security*",
+        "*audit*",
+        "*vulnerability*",
+        "eslint-plugin-security",
+        "bandit",
+        "safety"
+      ],
+      "labels": ["security", "dev-tools"],
+      "automerge": true,
+      "schedule": ["every weekend"]
+    }
+  ],
+  "regexManagers": [
+    {
+      "description": "Security tool versions in CI/CD files",
+      "fileMatch": ["^\\.gitlab-ci\\.ya?ml$", "^\\.github/workflows/.*\\.ya?ml$"],
+      "matchStrings": [
+        "(?<depName>gitleaks|trivy|semgrep|bandit|safety):(?<currentValue>[0-9.]+)"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Security scanner versions in Dockerfiles", 
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "FROM\\s+(?<depName>aquasec/trivy|clair|anchore/anchore-cli):(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "hostRules": [
+    {
+      "description": "Security-focused registries",
+      "matchHost": "security-registry.example.com",
+      "timeout": 60000
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Security policy versions",
+      "fileMatch": ["^security/.*\\.ya?ml$", "^\\.security/.*\\.ya?ml$"],
+      "matchStrings": [
+        "policy_version:\\s*[\"'](?<currentValue>[^\"']+)[\"']"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "security/policy"
+    }
+  ],
+  "ignoreDeps": [],
+  "ignorePaths": [
+    "node_modules/**",
+    "vendor/**",
+    "examples/**",
+    "demo/**"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am every day"],
+    "commitMessageAction": "Security lock file maintenance",
+    "labels": ["security", "lock-file-maintenance"]
+  },
+  "enabledManagers": [
+    "npm",
+    "pip_requirements",
+    "pip_setup", 
+    "pipenv",
+    "poetry",
+    "dockerfile",
+    "docker-compose",
+    "maven",
+    "gradle",
+    "bundler",
+    "composer",
+    "cargo",
+    "go-modules",
+    "terraform",
+    "ansible",
+    "gitlabci",
+    "github-actions",
+    "regex"
+  ],
+  "logLevel": "info"
+}
