@@ -10,7 +10,6 @@
     "group:recommended"
   ],
   "platform": "gitlab",
-  "gitlabUrl": "https://gitlab.example.com",
   "autodiscover": true,
   "autodiscoverFilter": "group/*",
   "onboarding": true,
@@ -30,7 +29,6 @@
   "assignees": [],
   "reviewers": [],
   "platformAutomerge": true,
-  "dependencyDashboard": true,
   "dependencyDashboardTitle": "🤖 Dependency Dashboard",
   "dependencyDashboardHeader": "This dashboard shows all dependency updates for this repository. Check the logs for more details on any failures.",
   "dependencyDashboardFooter": "💡 Configure Renovate by editing `renovate.json` or adding a `.renovaterc` file.",
@@ -44,7 +42,6 @@
   "commitMessageTopic": "{{depName}}",
   "commitMessageExtra": "to {{newVersion}}",
   "branchPrefix": "renovate/",
-  "includeForks": false,
   "forkProcessing": "disabled",
   "repositoryCache": "enabled",
   "vulnerabilityAlerts": {
@@ -150,7 +147,7 @@
     },
     {
       "description": "Limit Python package updates to stable versions",
-      "matchLanguages": ["python"],
+      "matchCategories": ["python"],
       "rangeStrategy": "pin",
       "labels": ["python"]
     },
@@ -236,8 +233,5 @@
     "gitlabci",
     "regex",
     "custom.regex"
-  ],
-  "logLevel": "info",
-  "logFile": "renovate.log",
-  "logFileLevel": "debug"
+  ]
 }

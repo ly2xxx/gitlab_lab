@@ -18,7 +18,7 @@ const path = require('path');
 // Environment detection
 const isProduction = process.env.NODE_ENV === 'production';
 const isGitLabCI = process.env.GITLAB_CI === 'true';
-const gitlabUrl = process.env.CI_API_V4_URL?.replace('/api/v4', '') || 'https://gitlab.example.com';
+const gitlabUrl = process.env.CI_API_V4_URL?.replace('/api/v4', '') || 'http://host.docker.internal';
 const gitlabToken = process.env.RENOVATE_TOKEN;
 
 // Dynamic configuration based on environment

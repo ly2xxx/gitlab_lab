@@ -38,7 +38,8 @@
       "WebFetch(domain:forum.gitlab.com)",
       "WebFetch(domain:stackoverflow.com)",
       "WebFetch(domain:gitlab.com)",
-      "WebFetch(domain:docs.renovatebot.com)"
+      "WebFetch(domain:docs.renovatebot.com)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
