@@ -104,50 +104,50 @@ validate-config:
         - config.js
         - configs/**/*
 
-# Main Renovate Job - Repository Updates
-renovate:
-  <<: *renovate-base
-  stage: renovate
-  resource_group: renovate-updates
-  timeout: 2h
-  script:
-    - |
-      # Prepare environment
-      mkdir -p renovate/logs
+# # Main Renovate Job - Repository Updates
+# renovate:
+#   <<: *renovate-base
+#   stage: renovate
+#   resource_group: renovate-updates
+#   timeout: 2h
+#   script:
+#     - |
+#       # Prepare environment
+#       mkdir -p renovate/logs
       
-      # Set repository filter if specified
-      if [ -n "$RENOVATE_AUTODISCOVER_FILTER" ]; then
-        echo "Using repository filter: $RENOVATE_AUTODISCOVER_FILTER"
-        export RENOVATE_AUTODISCOVER_FILTER
-      fi
+#       # Set repository filter if specified
+#       if [ -n "$RENOVATE_AUTODISCOVER_FILTER" ]; then
+#         echo "Using repository filter: $RENOVATE_AUTODISCOVER_FILTER"
+#         export RENOVATE_AUTODISCOVER_FILTER
+#       fi
       
-      # Run Renovate with autodiscovery
-      if [ "$RENOVATE_AUTODISCOVER" = "true" ]; then
-        echo "Running Renovate with autodiscovery"
-        renovate --autodiscover=true $RENOVATE_EXTRA_FLAGS
-      else
-        # Run on specific repositories (defined in config or via variables)
-        echo "Running Renovate on configured repositories"
-        renovate $RENOVATE_EXTRA_FLAGS
-      fi
+#       # Run Renovate with autodiscovery
+#       if [ "$RENOVATE_AUTODISCOVER" = "true" ]; then
+#         echo "Running Renovate with autodiscovery"
+#         renovate --autodiscover=true $RENOVATE_EXTRA_FLAGS
+#       else
+#         # Run on specific repositories (defined in config or via variables)
+#         echo "Running Renovate on configured repositories"
+#         renovate $RENOVATE_EXTRA_FLAGS
+#       fi
       
-      # Generate summary report
-      echo "Renovate execution completed at $(date)"
-      if [ -f "$LOG_FILE" ]; then
-        echo "Log file size: $(wc -l < $LOG_FILE) lines"
-        # Extract summary statistics
-        grep -c '"level":"info"' "$LOG_FILE" || echo "0 info messages"
-        grep -c '"level":"warn"' "$LOG_FILE" || echo "0 warning messages"  
-        grep -c '"level":"error"' "$LOG_FILE" || echo "0 error messages"
-      fi
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_PIPELINE_SOURCE == "web"
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - stuck_or_timeout_failure
+#       # Generate summary report
+#       echo "Renovate execution completed at $(date)"
+#       if [ -f "$LOG_FILE" ]; then
+#         echo "Log file size: $(wc -l < $LOG_FILE) lines"
+#         # Extract summary statistics
+#         grep -c '"level":"info"' "$LOG_FILE" || echo "0 info messages"
+#         grep -c '"level":"warn"' "$LOG_FILE" || echo "0 warning messages"  
+#         grep -c '"level":"error"' "$LOG_FILE" || echo "0 error messages"
+#       fi
+#   rules:
+#     - if: $CI_PIPELINE_SOURCE == "schedule"
+#     - if: $CI_PIPELINE_SOURCE == "web"
+#   retry:
+#     max: 2
+#     when:
+#       - runner_system_failure
+#       - stuck_or_timeout_failure
 
 # Dry Run Job - Test Configuration
 renovate-dry-run:
@@ -194,84 +194,84 @@ renovate-security:
     - when: manual
       allow_failure: true
 
-# Generate Reports
-generate-report:
-  stage: report
-  image: python:3.11-alpine
-  dependencies:
-    - renovate
-  script:
-    - |
-      if [ ! -f "$LOG_FILE" ]; then
-        echo "No log file found, skipping report generation"
-        exit 0
-      fi
+# # Generate Reports
+# generate-report:
+#   stage: report
+#   image: python:3.11-alpine
+#   dependencies:
+#     - renovate
+#   script:
+#     - |
+#       if [ ! -f "$LOG_FILE" ]; then
+#         echo "No log file found, skipping report generation"
+#         exit 0
+#       fi
       
-      # Install jq for JSON processing
-      apk add --no-cache jq
+#       # Install jq for JSON processing
+#       apk add --no-cache jq
       
-      # Generate summary report
-      cat > report-generator.py << 'EOF'
-      import json
-      import sys
-      from collections import defaultdict
+#       # Generate summary report
+#       cat > report-generator.py << 'EOF'
+#       import json
+#       import sys
+#       from collections import defaultdict
       
-      def generate_report(log_file):
-          stats = defaultdict(int)
-          repos_updated = set()
-          prs_created = []
-          errors = []
+#       def generate_report(log_file):
+#           stats = defaultdict(int)
+#           repos_updated = set()
+#           prs_created = []
+#           errors = []
           
-          try:
-              with open(log_file, 'r') as f:
-                  for line in f:
-                      try:
-                          entry = json.loads(line.strip())
-                          level = entry.get('level', '')
-                          msg = entry.get('msg', '')
+#           try:
+#               with open(log_file, 'r') as f:
+#                   for line in f:
+#                       try:
+#                           entry = json.loads(line.strip())
+#                           level = entry.get('level', '')
+#                           msg = entry.get('msg', '')
                           
-                          stats[level] += 1
+#                           stats[level] += 1
                           
-                          if 'repository' in entry:
-                              repos_updated.add(entry['repository'])
+#                           if 'repository' in entry:
+#                               repos_updated.add(entry['repository'])
                           
-                          if 'PR created' in msg:
-                              prs_created.append(entry)
+#                           if 'PR created' in msg:
+#                               prs_created.append(entry)
                           
-                          if level == 'error':
-                              errors.append(entry)
+#                           if level == 'error':
+#                               errors.append(entry)
                               
-                      except json.JSONDecodeError:
-                          continue
-          except FileNotFoundError:
-              print("Log file not found")
-              return
+#                       except json.JSONDecodeError:
+#                           continue
+#           except FileNotFoundError:
+#               print("Log file not found")
+#               return
               
-          print("# Renovate Execution Report")
-          print(f"- Repositories processed: {len(repos_updated)}")
-          print(f"- PRs created: {len(prs_created)}")  
-          print(f"- Info messages: {stats['info']}")
-          print(f"- Warning messages: {stats['warn']}")
-          print(f"- Error messages: {stats['error']}")
+#           print("# Renovate Execution Report")
+#           print(f"- Repositories processed: {len(repos_updated)}")
+#           print(f"- PRs created: {len(prs_created)}")  
+#           print(f"- Info messages: {stats['info']}")
+#           print(f"- Warning messages: {stats['warn']}")
+#           print(f"- Error messages: {stats['error']}")
           
-          if errors:
-              print("\n## Errors:")
-              for error in errors[:5]:  # Show first 5 errors
-                  print(f"- {error.get('msg', 'Unknown error')}")
+#           if errors:
+#               print("\n## Errors:")
+#               for error in errors[:5]:  # Show first 5 errors
+#                   print(f"- {error.get('msg', 'Unknown error')}")
                   
-      if __name__ == "__main__":
-          generate_report(sys.argv[1] if len(sys.argv) > 1 else 'renovate-log.ndjson')
-      EOF
+#       if __name__ == "__main__":
+#           generate_report(sys.argv[1] if len(sys.argv) > 1 else 'renovate-log.ndjson')
+#       EOF
       
-      python report-generator.py "$LOG_FILE" > renovate-report.md
-      cat renovate-report.md
-  artifacts:
-    when: always
-    expire_in: 30d
-    paths:
-      - renovate-report.md
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_PIPELINE_SOURCE == "web"
-    - when: manual
-      allow_failure: true
+#       python report-generator.py "$LOG_FILE" > renovate-report.md
+#       cat renovate-report.md
+#   artifacts:
+#     when: always
+#     expire_in: 30d
+#     paths:
+#       - renovate-report.md
+#   rules:
+#     - if: $CI_PIPELINE_SOURCE == "schedule"
+#     - if: $CI_PIPELINE_SOURCE == "web"
+#     - when: manual
+#       allow_failure: true
