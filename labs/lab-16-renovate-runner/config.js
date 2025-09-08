@@ -26,15 +26,9 @@ const baseConfig = {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   description: 'Dynamic GitLab Renovate Runner Configuration',
   
-  // Platform configuration
-  platform: 'gitlab',
+  // Platform configuration (endpoint and token managed via environment)
   endpoint: process.env.RENOVATE_ENDPOINT || `${gitlabUrl}/api/v4/`,
-  gitlabUrl: gitlabUrl,
   token: gitlabToken,
-  
-  // Repository discovery
-  autodiscover: true,
-  autodiscoverFilter: process.env.RENOVATE_AUTODISCOVER_FILTER || '*/*',
   
   // Git configuration
   gitAuthor: process.env.RENOVATE_GIT_AUTHOR || 'Renovate Bot <renovate@example.com>',
@@ -50,11 +44,6 @@ const baseConfig = {
     'group:recommended'
   ].filter(Boolean),
   
-  // Environment-specific settings
-  dryRun: process.env.RENOVATE_DRY_RUN || (isProduction ? null : 'full'),
-  requireConfig: isProduction ? 'required' : 'optional',
-  onboarding: !isProduction,
-  
   // Performance settings
   repositoryCache: 'enabled',
   optimizeForDisabled: true,
@@ -64,10 +53,7 @@ const baseConfig = {
   branchConcurrentLimit: isProduction ? 20 : 5,
   prHourlyLimit: isProduction ? 4 : 2,
   
-  // Logging configuration
-  logLevel: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
-  logFile: process.env.LOG_FILE || 'renovate.log',
-  logFileLevel: process.env.LOG_FILE_LEVEL || 'debug',
+  // Logging configuration (managed via environment variables)
   
   // Timezone and scheduling
   timezone: process.env.TZ || 'UTC',
@@ -118,7 +104,7 @@ const baseConfig = {
         '(?<depName>[A-Z_]+)_VERSION=["\'](?<currentValue>[^"\']+)["\']'
       ],
       datasourceTemplate: 'github-releases',
-      depNameTemplate: getDepNameFromEnvVar
+      depNameTemplate: '{{#if (containsString depName "NODEJS")}}nodejs/node{{else}}{{depName}}{{/if}}'
     },
     
     // GitLab CI includes
@@ -269,7 +255,7 @@ function generatePackageRules() {
   if (detectedTech.hasPython) {
     rules.push({
       description: 'Python: Pin versions for stability',
-      matchLanguages: ['python'],
+      matchCategories: ['python'],
       rangeStrategy: 'pin',
       labels: ['python']
     });
@@ -385,8 +371,8 @@ if (!isProduction) {
   console.log('Renovate configuration loaded with the following settings:');
   console.log(`- Environment: ${isProduction ? 'production' : 'development'}`);
   console.log(`- GitLab URL: ${gitlabUrl}`);
-  console.log(`- Autodiscover filter: ${baseConfig.autodiscoverFilter}`);
-  console.log(`- Dry run: ${baseConfig.dryRun}`);
+  console.log(`- Autodiscover filter: ${process.env.RENOVATE_AUTODISCOVER_FILTER || '*/*'}`);
+  console.log(`- Dry run: ${process.env.RENOVATE_DRY_RUN || 'full'}`);
   console.log(`- Package rules: ${baseConfig.packageRules.length}`);
 }
 
