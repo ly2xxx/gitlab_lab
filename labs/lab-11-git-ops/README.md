@@ -483,3 +483,6 @@ By mastering these techniques, you can significantly reduce manual maintenance o
 
 ![1754217301114](image/README/1754217301114.png)
 ![1754217371239](image/README/1754217371239.png)
+
+Claude reference:
+https://docs.anthropic.com/en/docs/claude-code/gitlab-ci-cd#aws-bedrock-job-example-oidc 
