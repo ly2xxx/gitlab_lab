@@ -100,6 +100,94 @@ cleanup-on-failure:
     - python3 python/git_operations.py cleanup
 
 # Alternative check using Claude API integration (manual job)
+check-updates-with-claude-code:
+  stage: check
+  image: node:24-alpine3.21
+  rules:
+    - when: manual
+      allow_failure: true
+  before_script:
+    # Install system dependencies
+    - apk add --no-cache git
+    # Install Claude Code for GitLab CI/CD
+    - npm install -g @anthropic-ai/claude-code
+  script:
+    - echo "🤖 Checking for Docker image updates using Claude Code..."
+    - |
+      # Read the current Dockerfile
+      if [ -f "sample-app/Dockerfile" ]; then
+        DOCKERFILE_CONTENT=$(cat sample-app/Dockerfile)
+        echo "Current Dockerfile:"
+        echo "$DOCKERFILE_CONTENT"
+        echo ""
+
+        # Extract current Python version
+        CURRENT_VERSION=$(grep "FROM python:" sample-app/Dockerfile | sed 's/FROM python://' | head -1)
+        echo "Current Python image: $CURRENT_VERSION"
+
+        # Use Claude Code to analyze Docker image updates
+        CLAUDE_PROMPT="Check this Dockerfile for Docker image updates:
+
+        $DOCKERFILE_CONTENT
+
+        Current version is python:$CURRENT_VERSION. Can you check if there are newer stable versions of the python slim image available and recommend if an update is needed?
+
+        Please format your response exactly as:
+        CURRENT: [current version]
+        LATEST: [latest available version]
+        UPDATE_NEEDED: [yes/no]
+        RECOMMENDATION: [brief explanation]"
+
+        echo "Asking Claude Code to analyze Docker image updates..."
+
+        # Run Claude Code and capture output
+        if claude -p "$CLAUDE_PROMPT" > claude-output.txt 2>&1; then
+          echo "✅ Claude Code analysis completed"
+          echo "Claude's Response:"
+          cat claude-output.txt
+          echo ""
+
+          # Parse Claude's response to create artifacts
+          CLAUDE_RESPONSE=$(cat claude-output.txt)
+          UPDATE_NEEDED=$(echo "$CLAUDE_RESPONSE" | grep "UPDATE_NEEDED:" | cut -d: -f2 | tr -d ' ')
+          LATEST_VERSION=$(echo "$CLAUDE_RESPONSE" | grep "LATEST:" | cut -d: -f2 | tr -d ' ')
+
+          # Create updates.env file for compatibility with existing pipeline
+          if [ "$UPDATE_NEEDED" = "yes" ]; then
+            echo "UPDATES_AVAILABLE=true" > updates.env
+            echo "PYTHON_UPDATE_FROM=$CURRENT_VERSION" >> updates.env
+            echo "PYTHON_UPDATE_TO=$LATEST_VERSION" >> updates.env
+            echo "ANALYSIS_METHOD=claude-code" >> updates.env
+            echo "🔄 Claude Code detected Docker image updates are available"
+          else
+            echo "UPDATES_AVAILABLE=false" > updates.env
+            echo "ANALYSIS_METHOD=claude-code" >> updates.env
+            echo "✅ Claude Code reports no updates needed"
+          fi
+        else
+          echo "❌ Claude Code execution failed"
+          echo "Error output:"
+          cat claude-output.txt
+          echo "UPDATES_AVAILABLE=error" > updates.env
+          echo "ERROR=claude_code_failed" >> updates.env
+          exit 1
+        fi
+      else
+        echo "❌ sample-app/Dockerfile not found"
+        echo "UPDATES_AVAILABLE=error" > updates.env
+        echo "ERROR=dockerfile_not_found" >> updates.env
+        exit 1
+      fi
+  artifacts:
+    reports:
+      dotenv: updates.env
+    paths:
+      - updates.env
+      - claude-output.txt
+    expire_in: 1 hour
+    when: always
+
+# Alternative check using Claude API integration (manual job)
 check-updates-with-claude:
   stage: check
   image: node:18-alpine
