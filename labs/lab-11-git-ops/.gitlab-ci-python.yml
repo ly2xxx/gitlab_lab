@@ -99,6 +99,120 @@ cleanup-on-failure:
     - echo "🧹 Cleaning up on failure using Python script..."
     - python3 python/git_operations.py cleanup
 
+# Alternative check using Claude API integration (manual job)
+check-updates-with-claude:
+  stage: check
+  image: node:18-alpine
+  rules:
+    - when: manual
+      allow_failure: true
+  before_script:
+    # Install system dependencies
+    - apk add --no-cache curl git jq
+    # Install npm packages for Claude integration (if using official package)
+    - npm install -g @anthropic/claude-cli 2>/dev/null || echo "Claude CLI not available, using curl approach"
+  script:
+    - echo "🤖 Checking for Docker image updates using Claude API..."
+    - |
+      # Read the current Dockerfile
+      if [ -f "sample-app/Dockerfile" ]; then
+        DOCKERFILE_CONTENT=$(cat sample-app/Dockerfile)
+        echo "Current Dockerfile:"
+        echo "$DOCKERFILE_CONTENT"
+        echo ""
+
+        # Extract current Python version
+        CURRENT_VERSION=$(grep "FROM python:" sample-app/Dockerfile | sed 's/FROM python://' | head -1)
+        echo "Current Python image: $CURRENT_VERSION"
+
+        # Use Claude API to check for updates (properly escape JSON)
+        PROMPT="I have this Dockerfile:
+
+        $DOCKERFILE_CONTENT
+
+        Can you check if there are newer versions of the Python base image available? Current version is $CURRENT_VERSION. Please check what the latest stable Python slim image version is and recommend if an update is needed. Format your response as:
+
+        CURRENT: [current version]
+        LATEST: [latest version]
+        UPDATE_NEEDED: [yes/no]
+        RECOMMENDATION: [brief explanation]"
+
+                # Create JSON using jq to properly escape content
+                jq -n \
+                  --arg model "claude-3-sonnet-20240229" \
+                  --arg prompt "$PROMPT" \
+                  '{
+                    model: $model,
+                    max_tokens: 1000,
+                    messages: [
+                      {
+                        role: "user",
+                        content: $prompt
+                      }
+                    ]
+                  }' > claude_request.json
+
+        # Make API call to Claude
+        if [ -n "$ANTHROPIC_API_KEY" ]; then
+          echo "Making API call to Claude..."
+          CLAUDE_RESPONSE=$(curl -s -X POST https://api.anthropic.com/v1/messages \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d @claude_request.json)
+
+          # Extract response content
+          RESPONSE_TEXT=$(echo "$CLAUDE_RESPONSE" | jq -r '.content[0].text // empty')
+
+          if [ -n "$RESPONSE_TEXT" ]; then
+            echo "Claude's Analysis:"
+            echo "$RESPONSE_TEXT"
+
+            # Parse Claude's response to create artifacts
+            UPDATE_NEEDED=$(echo "$RESPONSE_TEXT" | grep "UPDATE_NEEDED:" | cut -d: -f2 | tr -d ' ')
+            LATEST_VERSION=$(echo "$RESPONSE_TEXT" | grep "LATEST:" | cut -d: -f2 | tr -d ' ')
+
+            # Create updates.env file for compatibility with existing pipeline
+            if [ "$UPDATE_NEEDED" = "yes" ]; then
+              echo "UPDATES_AVAILABLE=true" > updates.env
+              echo "PYTHON_UPDATE_FROM=$CURRENT_VERSION" >> updates.env
+              echo "PYTHON_UPDATE_TO=$LATEST_VERSION" >> updates.env
+              echo "ANALYSIS_METHOD=claude-api" >> updates.env
+              echo "🔄 Claude detected Docker image updates are available"
+            else
+              echo "UPDATES_AVAILABLE=false" > updates.env
+              echo "ANALYSIS_METHOD=claude-api" >> updates.env
+              echo "✅ Claude reports no updates needed"
+            fi
+          else
+            echo "❌ Failed to get valid response from Claude API"
+            echo "Raw response: $CLAUDE_RESPONSE"
+            echo "UPDATES_AVAILABLE=error" > updates.env
+            echo "ERROR=claude_api_failed" >> updates.env
+            exit 1
+          fi
+        else
+          echo "❌ ANTHROPIC_API_KEY not set"
+          echo "Please set ANTHROPIC_API_KEY as a masked CI/CD variable"
+          echo "UPDATES_AVAILABLE=error" > updates.env
+          echo "ERROR=missing_api_key" >> updates.env
+          exit 1
+        fi
+      else
+        echo "❌ sample-app/Dockerfile not found"
+        echo "UPDATES_AVAILABLE=error" > updates.env
+        echo "ERROR=dockerfile_not_found" >> updates.env
+        exit 1
+      fi
+  artifacts:
+    reports:
+      dotenv: updates.env
+    paths:
+      - updates.env
+      - claude_request.json
+    expire_in: 1 hour
+    when: always
+
 # Optional utility jobs for debugging and testing
 
 # Test Python scripts locally (manual job)
