@@ -42,7 +42,13 @@
       "Bash(npm install:*)",
       "Bash(node:*)",
       "Bash(RENOVATE_DRY_RUN=full renovate --dry-run=full --config-file=config.js)",
-      "Bash(RENOVATE_TOKEN=dummy node -e \"\nconst config = require(''./config.js'');\nconst regexManager = config.regexManagers.find(m => m.depNameTemplate);\nconsole.log(''depNameTemplate type:'', typeof regexManager.depNameTemplate);\nconsole.log(''depNameTemplate value:'', regexManager.depNameTemplate);\nif (typeof regexManager.depNameTemplate === ''string'') {\n  console.log(''✓ depNameTemplate is correctly a string'');\n} else {\n  console.log(''✗ depNameTemplate should be a string'');\n  process.exit(1);\n}\n\")"
+      "Bash(RENOVATE_TOKEN=dummy node -e \"\nconst config = require(''./config.js'');\nconst regexManager = config.regexManagers.find(m => m.depNameTemplate);\nconsole.log(''depNameTemplate type:'', typeof regexManager.depNameTemplate);\nconsole.log(''depNameTemplate value:'', regexManager.depNameTemplate);\nif (typeof regexManager.depNameTemplate === ''string'') {\n  console.log(''✓ depNameTemplate is correctly a string'');\n} else {\n  console.log(''✗ depNameTemplate should be a string'');\n  process.exit(1);\n}\n\")",
+      "Bash(echo $PATH)",
+      "Bash(npm:*)",
+      "Read(//home/user/.npm-global/**)",
+      "Read(//home/user/.npm-global/bin/**)",
+      "Bash(echo $SHELL)",
+      "Read(//home/user/**)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits"

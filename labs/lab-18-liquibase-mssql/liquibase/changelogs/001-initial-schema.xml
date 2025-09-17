@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+
+    <!-- 
+    Changeset 001: Initial Schema
+    Creates the foundational tables for the e-commerce application
+    -->
+    
+    <changeSet id="001-1" author="lab18-developer" labels="v1.0.0">
+        <comment>Create users table</comment>
+        <createTable tableName="users">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="PK_users"/>
+            </column>
+            <column name="username" type="varchar(50)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="UQ_users_username"/>
+            </column>
+            <column name="email" type="varchar(100)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="UQ_users_email"/>
+            </column>
+            <column name="password_hash" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="first_name" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_name" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(20)" defaultValue="active">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="users"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="001-2" author="lab18-developer" labels="v1.0.0">
+        <comment>Create categories table</comment>
+        <createTable tableName="categories">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="PK_categories"/>
+            </column>
+            <column name="name" type="varchar(100)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="UQ_categories_name"/>
+            </column>
+            <column name="description" type="text"/>
+            <column name="parent_id" type="int">
+                <constraints nullable="true"/>
+            </column>
+            <column name="is_active" type="bit" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sort_order" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="categories"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="001-3" author="lab18-developer" labels="v1.0.0">
+        <comment>Add self-referencing foreign key to categories</comment>
+        <addForeignKeyConstraint
+            baseTableName="categories"
+            baseColumnNames="parent_id"
+            referencedTableName="categories"
+            referencedColumnNames="id"
+            constraintName="FK_categories_parent"
+            onDelete="SET NULL"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="categories" constraintName="FK_categories_parent"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="001-4" author="lab18-developer" labels="v1.0.0" context="development,testing">
+        <comment>Insert sample users for development and testing</comment>
+        <insert tableName="users">
+            <column name="username" value="admin"/>
+            <column name="email" value="admin@example.com"/>
+            <column name="password_hash" value="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LeVMst.7qO.5QOzem"/>
+            <column name="first_name" value="System"/>
+            <column name="last_name" value="Administrator"/>
+            <column name="status" value="active"/>
+        </insert>
+        
+        <insert tableName="users">
+            <column name="username" value="testuser"/>
+            <column name="email" value="test@example.com"/>
+            <column name="password_hash" value="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LeVMst.7qO.5QOzem"/>
+            <column name="first_name" value="Test"/>
+            <column name="last_name" value="User"/>
+            <column name="status" value="active"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="users">
+                <where>username IN ('admin', 'testuser')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="001-5" author="lab18-developer" labels="v1.0.0" context="development,testing">
+        <comment>Insert sample categories for development and testing</comment>
+        <insert tableName="categories">
+            <column name="name" value="Electronics"/>
+            <column name="description" value="Electronic devices and accessories"/>
+            <column name="sort_order" value="1"/>
+        </insert>
+        
+        <insert tableName="categories">
+            <column name="name" value="Books"/>
+            <column name="description" value="Books and educational materials"/>
+            <column name="sort_order" value="2"/>
+        </insert>
+        
+        <insert tableName="categories">
+            <column name="name" value="Clothing"/>
+            <column name="description" value="Apparel and fashion items"/>
+            <column name="sort_order" value="3"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="categories">
+                <where>name IN ('Electronics', 'Books', 'Clothing')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="001-6" author="lab18-developer" labels="v1.0.0">
+        <comment>Create update trigger for users table</comment>
+        <sql>
+            CREATE TRIGGER tr_users_update
+            ON users
+            AFTER UPDATE
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                UPDATE users 
+                SET updated_at = GETDATE()
+                FROM users u
+                INNER JOIN inserted i ON u.id = i.id;
+            END
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER IF EXISTS tr_users_update</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="001-7" author="lab18-developer" labels="v1.0.0">
+        <comment>Create update trigger for categories table</comment>
+        <sql>
+            CREATE TRIGGER tr_categories_update
+            ON categories
+            AFTER UPDATE
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                UPDATE categories 
+                SET updated_at = GETDATE()
+                FROM categories c
+                INNER JOIN inserted i ON c.id = i.id;
+            END
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER IF EXISTS tr_categories_update</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

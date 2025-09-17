@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd
+    http://www.liquibase.org/xml/ns/dbchangelog-ext
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
+
+    <!-- 
+    Master changelog for Lab 18: Liquibase with Microsoft SQL Server
+    
+    This file includes all individual changelog files in the correct order.
+    Each changelog represents a version or feature increment.
+    -->
+
+    <!-- Version 1.0.0: Initial Schema -->
+    <include file="001-initial-schema.xml" relativeToChangelogFile="true"/>
+    
+    <!-- Version 1.1.0: Add Products and Categories -->
+    <include file="002-add-products.xml" relativeToChangelogFile="true"/>
+    
+    <!-- Version 1.2.0: Add Orders and Order Items -->
+    <include file="003-add-orders.xml" relativeToChangelogFile="true"/>
+    
+    <!-- Version 1.3.0: Add Indexes and Performance Optimizations -->
+    <include file="004-add-indexes.xml" relativeToChangelogFile="true"/>
+    
+    <!-- Version 1.4.0: Add Audit Trail -->
+    <include file="005-add-audit-trail.xml" relativeToChangelogFile="true"/>
+    
+    <!-- Version 1.5.0: Add User Roles and Permissions -->
+    <include file="006-add-user-roles.xml" relativeToChangelogFile="true"/>
+
+</databaseChangeLog>

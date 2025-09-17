@@ -1,0 +1,508 @@
+# Lab 18: Liquibase with Microsoft SQL Server CI/CD Pipeline
+include:
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+  - template: Security/License-Scanning.gitlab-ci.yml
+
+variables:
+  # Liquibase configuration
+  LIQUIBASE_VERSION: "4.25.1"
+  LIQUIBASE_HUB_MODE: "off"
+  
+  # SQL Server configuration
+  MSSQL_IMAGE: "mcr.microsoft.com/mssql/server:2019-latest"
+  MSSQL_SA_PASSWORD: "YourStrong@Passw0rd123"
+  
+  # Database environments
+  DEV_DB_NAME: "lab18_development"
+  STAGING_DB_NAME: "lab18_staging"
+  PROD_DB_NAME: "lab18_production"
+  
+  # Pipeline configuration
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+services:
+  - docker:24-dind
+
+stages:
+  - validate
+  - build
+  - test-db
+  - deploy-dev
+  - deploy-staging
+  - deploy-prod
+  - verify
+
+# Stage 1: Validation
+validate-liquibase:
+  stage: validate
+  image: liquibase/liquibase:$LIQUIBASE_VERSION
+  script:
+    - echo "Validating Liquibase changelogs..."
+    - liquibase --version
+    - liquibase --changeLogFile=liquibase/changelogs/db.changelog-master.xml validate
+    - echo "✅ Changelog validation successful"
+  artifacts:
+    reports:
+      junit: liquibase-validation-report.xml
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+validate-sql-syntax:
+  stage: validate
+  image: alpine:latest
+  script:
+    - apk add --no-cache xmlstarlet
+    - echo "Validating SQL syntax in changelogs..."
+    - find liquibase/changelogs -name "*.xml" -exec xmlstarlet val {} \;
+    - find liquibase/sql -name "*.sql" -exec echo "Checking {}" \;
+    - echo "✅ SQL syntax validation successful"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Stage 2: Build Liquibase environment
+build-liquibase-runner:
+  stage: build
+  image: docker:24
+  script:
+    - echo "Building custom Liquibase runner with SQL Server drivers..."
+    - docker build -f docker/Dockerfile.liquibase -t liquibase-sqlserver:latest .
+    - docker save liquibase-sqlserver:latest > liquibase-runner.tar
+  artifacts:
+    paths:
+      - liquibase-runner.tar
+    expire_in: 1 hour
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Stage 3: Database Testing
+test-migrations:
+  stage: test-db
+  image: docker:24
+  services:
+    - name: mcr.microsoft.com/mssql/server:2019-latest
+      alias: sqlserver
+      variables:
+        ACCEPT_EULA: "Y"
+        SA_PASSWORD: $MSSQL_SA_PASSWORD
+        MSSQL_PID: "Developer"
+  variables:
+    DB_HOST: sqlserver
+    DB_USER: sa
+    DB_PASSWORD: $MSSQL_SA_PASSWORD
+    DB_NAME: "tempdb"
+  before_script:
+    - docker load < liquibase-runner.tar
+    - apk add --no-cache curl
+    # Wait for SQL Server to be ready
+    - |
+      until docker run --rm --network container:sqlserver \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT 1" > /dev/null 2>&1; do
+        echo "Waiting for SQL Server to be ready..."
+        sleep 5
+      done
+    - echo "SQL Server is ready!"
+  script:
+    - echo "Testing database migrations..."
+    # Create test database
+    - |
+      docker run --rm --network container:sqlserver \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" \
+        -Q "CREATE DATABASE test_migrations"
+    
+    # Run Liquibase update
+    - |
+      docker run --rm --network container:sqlserver \
+        -v $PWD:/workspace \
+        -w /workspace \
+        liquibase-sqlserver:latest \
+        --changeLogFile=liquibase/changelogs/db.changelog-master.xml \
+        --url="jdbc:sqlserver://localhost:1433;databaseName=test_migrations;trustServerCertificate=true" \
+        --username=sa \
+        --password="$MSSQL_SA_PASSWORD" \
+        --contexts=testing \
+        update
+    
+    # Verify schema
+    - |
+      docker run --rm --network container:sqlserver \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -d test_migrations \
+        -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'"
+    
+    # Test rollback
+    - |
+      docker run --rm --network container:sqlserver \
+        -v $PWD:/workspace \
+        -w /workspace \
+        liquibase-sqlserver:latest \
+        --changeLogFile=liquibase/changelogs/db.changelog-master.xml \
+        --url="jdbc:sqlserver://localhost:1433;databaseName=test_migrations;trustServerCertificate=true" \
+        --username=sa \
+        --password="$MSSQL_SA_PASSWORD" \
+        rollbackCount 1
+    
+    - echo "✅ Migration testing successful"
+  artifacts:
+    reports:
+      junit: test-results.xml
+    paths:
+      - liquibase-reports/
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Stage 4: Development Deployment
+deploy-development:
+  stage: deploy-dev
+  image: docker:24
+  services:
+    - name: mcr.microsoft.com/mssql/server:2019-latest
+      alias: sqlserver-dev
+      variables:
+        ACCEPT_EULA: "Y"
+        SA_PASSWORD: $MSSQL_SA_PASSWORD
+        MSSQL_PID: "Developer"
+  variables:
+    DB_HOST: sqlserver-dev
+    DB_NAME: $DEV_DB_NAME
+    LIQUIBASE_CONTEXTS: "development,testing"
+  before_script:
+    - docker load < liquibase-runner.tar
+    # Wait for SQL Server
+    - |
+      until docker run --rm --network container:sqlserver-dev \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT 1" > /dev/null 2>&1; do
+        echo "Waiting for SQL Server to be ready..."
+        sleep 5
+      done
+  script:
+    - echo "Deploying to Development environment..."
+    # Create development database
+    - |
+      docker run --rm --network container:sqlserver-dev \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" \
+        -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = '$DEV_DB_NAME') CREATE DATABASE $DEV_DB_NAME"
+    
+    # Deploy schema changes
+    - |
+      docker run --rm --network container:sqlserver-dev \
+        -v $PWD:/workspace \
+        -w /workspace \
+        liquibase-sqlserver:latest \
+        --changeLogFile=liquibase/changelogs/db.changelog-master.xml \
+        --url="jdbc:sqlserver://localhost:1433;databaseName=$DEV_DB_NAME;trustServerCertificate=true" \
+        --username=sa \
+        --password="$MSSQL_SA_PASSWORD" \
+        --contexts="$LIQUIBASE_CONTEXTS" \
+        update
+    
+    - echo "✅ Development deployment successful"
+  environment:
+    name: development
+    url: http://dev-database.example.com
+  artifacts:
+    paths:
+      - liquibase-reports/development/
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Stage 5: Staging Deployment
+deploy-staging:
+  stage: deploy-staging
+  image: docker:24
+  services:
+    - name: mcr.microsoft.com/mssql/server:2019-latest
+      alias: sqlserver-staging
+      variables:
+        ACCEPT_EULA: "Y"
+        SA_PASSWORD: $MSSQL_SA_PASSWORD
+        MSSQL_PID: "Developer"
+  variables:
+    DB_HOST: sqlserver-staging
+    DB_NAME: $STAGING_DB_NAME
+    LIQUIBASE_CONTEXTS: "staging"
+  before_script:
+    - docker load < liquibase-runner.tar
+    # Wait for SQL Server
+    - |
+      until docker run --rm --network container:sqlserver-staging \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT 1" > /dev/null 2>&1; do
+        echo "Waiting for SQL Server to be ready..."
+        sleep 5
+      done
+  script:
+    - echo "Deploying to Staging environment..."
+    # Create staging database
+    - |
+      docker run --rm --network container:sqlserver-staging \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" \
+        -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = '$STAGING_DB_NAME') CREATE DATABASE $STAGING_DB_NAME"
+    
+    # Generate rollback script before deployment
+    - |
+      docker run --rm --network container:sqlserver-staging \
+        -v $PWD:/workspace \
+        -w /workspace \
+        liquibase-sqlserver:latest \
+        --changeLogFile=liquibase/changelogs/db.changelog-master.xml \
+        --url="jdbc:sqlserver://localhost:1433;databaseName=$STAGING_DB_NAME;trustServerCertificate=true" \
+        --username=sa \
+        --password="$MSSQL_SA_PASSWORD" \
+        updateSQL > staging-deployment.sql
+    
+    # Deploy schema changes
+    - |
+      docker run --rm --network container:sqlserver-staging \
+        -v $PWD:/workspace \
+        -w /workspace \
+        liquibase-sqlserver:latest \
+        --changeLogFile=liquibase/changelogs/db.changelog-master.xml \
+        --url="jdbc:sqlserver://localhost:1433;databaseName=$STAGING_DB_NAME;trustServerCertificate=true" \
+        --username=sa \
+        --password="$MSSQL_SA_PASSWORD" \
+        --contexts="$LIQUIBASE_CONTEXTS" \
+        update
+    
+    - echo "✅ Staging deployment successful"
+  environment:
+    name: staging
+    url: http://staging-database.example.com
+  artifacts:
+    paths:
+      - staging-deployment.sql
+      - liquibase-reports/staging/
+    expire_in: 1 month
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  when: manual
+
+# Stage 6: Production Deployment
+deploy-production:
+  stage: deploy-prod
+  image: docker:24
+  services:
+    - name: mcr.microsoft.com/mssql/server:2019-latest
+      alias: sqlserver-prod
+      variables:
+        ACCEPT_EULA: "Y"
+        SA_PASSWORD: $MSSQL_SA_PASSWORD
+        MSSQL_PID: "Developer"
+  variables:
+    DB_HOST: sqlserver-prod
+    DB_NAME: $PROD_DB_NAME
+    LIQUIBASE_CONTEXTS: "production"
+  before_script:
+    - docker load < liquibase-runner.tar
+    # Wait for SQL Server
+    - |
+      until docker run --rm --network container:sqlserver-prod \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT 1" > /dev/null 2>&1; do
+        echo "Waiting for SQL Server to be ready..."
+        sleep 5
+      done
+  script:
+    - echo "Deploying to Production environment..."
+    # Create production database
+    - |
+      docker run --rm --network container:sqlserver-prod \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" \
+        -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = '$PROD_DB_NAME') CREATE DATABASE $PROD_DB_NAME"
+    
+    # Generate rollback script
+    - |
+      docker run --rm --network container:sqlserver-prod \
+        -v $PWD:/workspace \
+        -w /workspace \
+        liquibase-sqlserver:latest \
+        --changeLogFile=liquibase/changelogs/db.changelog-master.xml \
+        --url="jdbc:sqlserver://localhost:1433;databaseName=$PROD_DB_NAME;trustServerCertificate=true" \
+        --username=sa \
+        --password="$MSSQL_SA_PASSWORD" \
+        futureRollbackSQL > production-rollback.sql
+    
+    # Deploy with dry-run first
+    - |
+      docker run --rm --network container:sqlserver-prod \
+        -v $PWD:/workspace \
+        -w /workspace \
+        liquibase-sqlserver:latest \
+        --changeLogFile=liquibase/changelogs/db.changelog-master.xml \
+        --url="jdbc:sqlserver://localhost:1433;databaseName=$PROD_DB_NAME;trustServerCertificate=true" \
+        --username=sa \
+        --password="$MSSQL_SA_PASSWORD" \
+        --contexts="$LIQUIBASE_CONTEXTS" \
+        updateSQL > production-deployment.sql
+    
+    - echo "Production deployment plan generated. Review before proceeding."
+    - cat production-deployment.sql
+    
+    # Actual deployment
+    - |
+      docker run --rm --network container:sqlserver-prod \
+        -v $PWD:/workspace \
+        -w /workspace \
+        liquibase-sqlserver:latest \
+        --changeLogFile=liquibase/changelogs/db.changelog-master.xml \
+        --url="jdbc:sqlserver://localhost:1433;databaseName=$PROD_DB_NAME;trustServerCertificate=true" \
+        --username=sa \
+        --password="$MSSQL_SA_PASSWORD" \
+        --contexts="$LIQUIBASE_CONTEXTS" \
+        update
+    
+    - echo "✅ Production deployment successful"
+  environment:
+    name: production
+    url: http://prod-database.example.com
+  artifacts:
+    paths:
+      - production-deployment.sql
+      - production-rollback.sql
+      - liquibase-reports/production/
+    expire_in: 6 months
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  when: manual
+
+# Stage 7: Verification
+verify-deployments:
+  stage: verify
+  image: docker:24
+  services:
+    - name: mcr.microsoft.com/mssql/server:2019-latest
+      alias: sqlserver-verify
+      variables:
+        ACCEPT_EULA: "Y"
+        SA_PASSWORD: $MSSQL_SA_PASSWORD
+        MSSQL_PID: "Developer"
+  before_script:
+    - apk add --no-cache curl jq
+    - docker load < liquibase-runner.tar
+    # Wait for SQL Server
+    - |
+      until docker run --rm --network container:sqlserver-verify \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT 1" > /dev/null 2>&1; do
+        echo "Waiting for SQL Server to be ready..."
+        sleep 5
+      done
+  script:
+    - echo "Verifying database deployments..."
+    
+    # Recreate databases for verification
+    - |
+      for db in $DEV_DB_NAME $STAGING_DB_NAME $PROD_DB_NAME; do
+        docker run --rm --network container:sqlserver-verify \
+          mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+          -S localhost -U sa -P "$MSSQL_SA_PASSWORD" \
+          -Q "IF EXISTS (SELECT name FROM sys.databases WHERE name = '$db') DROP DATABASE $db; CREATE DATABASE $db"
+      done
+    
+    # Verify schema consistency across environments
+    - |
+      for db in $DEV_DB_NAME $STAGING_DB_NAME $PROD_DB_NAME; do
+        echo "Verifying $db..."
+        context=""
+        case $db in
+          $DEV_DB_NAME) context="development,testing" ;;
+          $STAGING_DB_NAME) context="staging" ;;
+          $PROD_DB_NAME) context="production" ;;
+        esac
+        
+        docker run --rm --network container:sqlserver-verify \
+          -v $PWD:/workspace \
+          -w /workspace \
+          liquibase-sqlserver:latest \
+          --changeLogFile=liquibase/changelogs/db.changelog-master.xml \
+          --url="jdbc:sqlserver://localhost:1433;databaseName=$db;trustServerCertificate=true" \
+          --username=sa \
+          --password="$MSSQL_SA_PASSWORD" \
+          --contexts="$context" \
+          status --verbose
+      done
+    
+    - echo "✅ Database verification successful"
+  artifacts:
+    reports:
+      junit: verification-results.xml
+    paths:
+      - verification-reports/
+    expire_in: 1 month
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Performance testing job
+performance-test:
+  stage: verify
+  image: docker:24
+  services:
+    - name: mcr.microsoft.com/mssql/server:2019-latest
+      alias: sqlserver-perf
+      variables:
+        ACCEPT_EULA: "Y"
+        SA_PASSWORD: $MSSQL_SA_PASSWORD
+        MSSQL_PID: "Developer"
+  before_script:
+    - docker load < liquibase-runner.tar
+    # Wait for SQL Server
+    - |
+      until docker run --rm --network container:sqlserver-perf \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT 1" > /dev/null 2>&1; do
+        echo "Waiting for SQL Server to be ready..."
+        sleep 5
+      done
+  script:
+    - echo "Running performance tests..."
+    # Create performance test database
+    - |
+      docker run --rm --network container:sqlserver-perf \
+        mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd \
+        -S localhost -U sa -P "$MSSQL_SA_PASSWORD" \
+        -Q "CREATE DATABASE performance_test"
+    
+    # Time the migration execution
+    - |
+      start_time=$(date +%s)
+      docker run --rm --network container:sqlserver-perf \
+        -v $PWD:/workspace \
+        -w /workspace \
+        liquibase-sqlserver:latest \
+        --changeLogFile=liquibase/changelogs/db.changelog-master.xml \
+        --url="jdbc:sqlserver://localhost:1433;databaseName=performance_test;trustServerCertificate=true" \
+        --username=sa \
+        --password="$MSSQL_SA_PASSWORD" \
+        --contexts=testing \
+        update
+      end_time=$(date +%s)
+      duration=$((end_time - start_time))
+      echo "Migration completed in $duration seconds"
+      
+      # Fail if migration takes too long (adjust threshold as needed)
+      if [ $duration -gt 300 ]; then
+        echo "❌ Migration took too long: $duration seconds"
+        exit 1
+      fi
+    
+    - echo "✅ Performance test passed"
+  artifacts:
+    paths:
+      - performance-reports/
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  allow_failure: true

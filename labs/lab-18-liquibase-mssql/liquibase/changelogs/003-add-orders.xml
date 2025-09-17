@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+
+    <!-- 
+    Changeset 003: Add Orders
+    Creates orders and order_items tables with related functionality
+    -->
+
+    <changeSet id="003-1" author="lab18-developer" labels="v1.2.0">
+        <comment>Create orders table</comment>
+        <createTable tableName="orders">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="PK_orders"/>
+            </column>
+            <column name="order_number" type="varchar(20)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="UQ_orders_order_number"/>
+            </column>
+            <column name="user_id" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(20)" defaultValue="pending">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subtotal" type="decimal(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tax_amount" type="decimal(10,2)" defaultValueNumeric="0.00">
+                <constraints nullable="false"/>
+            </column>
+            <column name="shipping_amount" type="decimal(10,2)" defaultValueNumeric="0.00">
+                <constraints nullable="false"/>
+            </column>
+            <column name="discount_amount" type="decimal(10,2)" defaultValueNumeric="0.00">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_amount" type="decimal(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency" type="varchar(3)" defaultValue="USD">
+                <constraints nullable="false"/>
+            </column>
+            <column name="shipping_address" type="text"/>
+            <column name="billing_address" type="text"/>
+            <column name="payment_method" type="varchar(50)"/>
+            <column name="payment_status" type="varchar(20)" defaultValue="pending">
+                <constraints nullable="false"/>
+            </column>
+            <column name="notes" type="text"/>
+            <column name="ordered_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="shipped_at" type="datetime2"/>
+            <column name="delivered_at" type="datetime2"/>
+            <column name="created_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="orders"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-2" author="lab18-developer" labels="v1.2.0">
+        <comment>Add foreign key constraint to orders table</comment>
+        <addForeignKeyConstraint
+            baseTableName="orders"
+            baseColumnNames="user_id"
+            referencedTableName="users"
+            referencedColumnNames="id"
+            constraintName="FK_orders_user"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="orders" constraintName="FK_orders_user"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-3" author="lab18-developer" labels="v1.2.0">
+        <comment>Create order_items table</comment>
+        <createTable tableName="order_items">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="PK_order_items"/>
+            </column>
+            <column name="order_id" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_id" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quantity" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="unit_price" type="decimal(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_price" type="decimal(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_name" type="varchar(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_sku" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_attributes" type="text"/>
+            <column name="created_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="order_items"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-4" author="lab18-developer" labels="v1.2.0">
+        <comment>Add foreign key constraints to order_items table</comment>
+        <addForeignKeyConstraint
+            baseTableName="order_items"
+            baseColumnNames="order_id"
+            referencedTableName="orders"
+            referencedColumnNames="id"
+            constraintName="FK_order_items_order"
+            onDelete="CASCADE"/>
+            
+        <addForeignKeyConstraint
+            baseTableName="order_items"
+            baseColumnNames="product_id"
+            referencedTableName="products"
+            referencedColumnNames="id"
+            constraintName="FK_order_items_product"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="order_items" constraintName="FK_order_items_order"/>
+            <dropForeignKeyConstraint baseTableName="order_items" constraintName="FK_order_items_product"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-5" author="lab18-developer" labels="v1.2.0">
+        <comment>Create order_status_history table for tracking status changes</comment>
+        <createTable tableName="order_status_history">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="PK_order_status_history"/>
+            </column>
+            <column name="order_id" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="old_status" type="varchar(20)"/>
+            <column name="new_status" type="varchar(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_by" type="int"/>
+            <column name="change_reason" type="varchar(500)"/>
+            <column name="created_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint
+            baseTableName="order_status_history"
+            baseColumnNames="order_id"
+            referencedTableName="orders"
+            referencedColumnNames="id"
+            constraintName="FK_order_status_history_order"
+            onDelete="CASCADE"/>
+            
+        <addForeignKeyConstraint
+            baseTableName="order_status_history"
+            baseColumnNames="changed_by"
+            referencedTableName="users"
+            referencedColumnNames="id"
+            constraintName="FK_order_status_history_user"/>
+        
+        <rollback>
+            <dropTable tableName="order_status_history"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-6" author="lab18-developer" labels="v1.2.0">
+        <comment>Create update trigger for orders table</comment>
+        <sql>
+            CREATE TRIGGER tr_orders_update
+            ON orders
+            AFTER UPDATE
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                UPDATE orders 
+                SET updated_at = GETDATE()
+                FROM orders o
+                INNER JOIN inserted i ON o.id = i.id;
+            END
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER IF EXISTS tr_orders_update</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-7" author="lab18-developer" labels="v1.2.0">
+        <comment>Create trigger to track order status changes</comment>
+        <sql>
+            CREATE TRIGGER tr_orders_status_change
+            ON orders
+            AFTER UPDATE
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                
+                INSERT INTO order_status_history (order_id, old_status, new_status, change_reason)
+                SELECT 
+                    i.id,
+                    d.status,
+                    i.status,
+                    'Status changed via update'
+                FROM inserted i
+                INNER JOIN deleted d ON i.id = d.id
+                WHERE i.status != d.status;
+            END
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER IF EXISTS tr_orders_status_change</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-8" author="lab18-developer" labels="v1.2.0">
+        <comment>Add check constraints for orders data validation</comment>
+        
+        <sql>
+            ALTER TABLE orders 
+            ADD CONSTRAINT CK_orders_subtotal_positive 
+            CHECK (subtotal >= 0)
+        </sql>
+        
+        <sql>
+            ALTER TABLE orders 
+            ADD CONSTRAINT CK_orders_total_positive 
+            CHECK (total_amount >= 0)
+        </sql>
+        
+        <sql>
+            ALTER TABLE orders 
+            ADD CONSTRAINT CK_orders_status_valid 
+            CHECK (status IN ('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'))
+        </sql>
+        
+        <sql>
+            ALTER TABLE orders 
+            ADD CONSTRAINT CK_orders_payment_status_valid 
+            CHECK (payment_status IN ('pending', 'authorized', 'captured', 'failed', 'refunded'))
+        </sql>
+        
+        <sql>
+            ALTER TABLE order_items 
+            ADD CONSTRAINT CK_order_items_quantity_positive 
+            CHECK (quantity > 0)
+        </sql>
+        
+        <sql>
+            ALTER TABLE order_items 
+            ADD CONSTRAINT CK_order_items_unit_price_positive 
+            CHECK (unit_price >= 0)
+        </sql>
+        
+        <rollback>
+            <sql>ALTER TABLE orders DROP CONSTRAINT IF EXISTS CK_orders_subtotal_positive</sql>
+            <sql>ALTER TABLE orders DROP CONSTRAINT IF EXISTS CK_orders_total_positive</sql>
+            <sql>ALTER TABLE orders DROP CONSTRAINT IF EXISTS CK_orders_status_valid</sql>
+            <sql>ALTER TABLE orders DROP CONSTRAINT IF EXISTS CK_orders_payment_status_valid</sql>
+            <sql>ALTER TABLE order_items DROP CONSTRAINT IF EXISTS CK_order_items_quantity_positive</sql>
+            <sql>ALTER TABLE order_items DROP CONSTRAINT IF EXISTS CK_order_items_unit_price_positive</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-9" author="lab18-developer" labels="v1.2.0" context="development,testing">
+        <comment>Insert sample orders for development and testing</comment>
+        
+        <sql>
+            DECLARE @admin_id INT = (SELECT id FROM users WHERE username = 'admin');
+            DECLARE @test_user_id INT = (SELECT id FROM users WHERE username = 'testuser');
+            DECLARE @phone_id INT = (SELECT id FROM products WHERE sku = 'PHONE-XYZ-001');
+            DECLARE @headphones_id INT = (SELECT id FROM products WHERE sku = 'AUDIO-WH-002');
+            DECLARE @book_id INT = (SELECT id FROM products WHERE sku = 'BOOK-DB-003');
+            
+            -- Order 1: Test user order
+            INSERT INTO orders (order_number, user_id, status, subtotal, tax_amount, shipping_amount, total_amount, 
+                               shipping_address, billing_address, payment_method, payment_status)
+            VALUES ('ORD-2024-001', @test_user_id, 'confirmed', 699.99, 56.00, 15.00, 770.99,
+                    '123 Test Street, Test City, TC 12345', '123 Test Street, Test City, TC 12345',
+                    'credit_card', 'captured');
+            
+            DECLARE @order1_id INT = SCOPE_IDENTITY();
+            
+            -- Order 1 items
+            INSERT INTO order_items (order_id, product_id, quantity, unit_price, total_price, product_name, product_sku)
+            VALUES (@order1_id, @phone_id, 1, 699.99, 699.99, 'Smartphone XYZ', 'PHONE-XYZ-001');
+            
+            -- Order 2: Admin order with multiple items
+            INSERT INTO orders (order_number, user_id, status, subtotal, tax_amount, shipping_amount, total_amount,
+                               shipping_address, billing_address, payment_method, payment_status)
+            VALUES ('ORD-2024-002', @admin_id, 'processing', 249.98, 20.00, 10.00, 279.98,
+                    '456 Admin Ave, Admin City, AC 67890', '456 Admin Ave, Admin City, AC 67890',
+                    'paypal', 'captured');
+            
+            DECLARE @order2_id INT = SCOPE_IDENTITY();
+            
+            -- Order 2 items
+            INSERT INTO order_items (order_id, product_id, quantity, unit_price, total_price, product_name, product_sku)
+            VALUES (@order2_id, @headphones_id, 1, 199.99, 199.99, 'Wireless Headphones', 'AUDIO-WH-002'),
+                   (@order2_id, @book_id, 1, 49.99, 49.99, 'Database Design Fundamentals', 'BOOK-DB-003');
+            
+            -- Order 3: Cancelled order
+            INSERT INTO orders (order_number, user_id, status, subtotal, tax_amount, shipping_amount, total_amount,
+                               payment_status)
+            VALUES ('ORD-2024-003', @test_user_id, 'cancelled', 199.99, 16.00, 10.00, 225.99, 'refunded');
+            
+            DECLARE @order3_id INT = SCOPE_IDENTITY();
+            
+            INSERT INTO order_items (order_id, product_id, quantity, unit_price, total_price, product_name, product_sku)
+            VALUES (@order3_id, @headphones_id, 1, 199.99, 199.99, 'Wireless Headphones', 'AUDIO-WH-002');
+        </sql>
+        
+        <rollback>
+            <delete tableName="order_items">
+                <where>order_id IN (SELECT id FROM orders WHERE order_number IN ('ORD-2024-001', 'ORD-2024-002', 'ORD-2024-003'))</where>
+            </delete>
+            <delete tableName="orders">
+                <where>order_number IN ('ORD-2024-001', 'ORD-2024-002', 'ORD-2024-003')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-10" author="lab18-developer" labels="v1.2.0">
+        <comment>Create function to generate order numbers</comment>
+        <sql>
+            CREATE FUNCTION fn_generate_order_number()
+            RETURNS VARCHAR(20)
+            AS
+            BEGIN
+                DECLARE @order_number VARCHAR(20);
+                DECLARE @year VARCHAR(4) = CAST(YEAR(GETDATE()) AS VARCHAR(4));
+                DECLARE @next_number INT;
+                
+                SELECT @next_number = ISNULL(MAX(CAST(SUBSTRING(order_number, 10, 3) AS INT)), 0) + 1
+                FROM orders 
+                WHERE order_number LIKE 'ORD-' + @year + '-%';
+                
+                SET @order_number = 'ORD-' + @year + '-' + RIGHT('000' + CAST(@next_number AS VARCHAR(3)), 3);
+                
+                RETURN @order_number;
+            END
+        </sql>
+        
+        <rollback>
+            <sql>DROP FUNCTION IF EXISTS fn_generate_order_number</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-11" author="lab18-developer" labels="v1.2.0">
+        <comment>Create stored procedure for order creation</comment>
+        <sql>
+            CREATE PROCEDURE sp_create_order
+                @user_id INT,
+                @shipping_address TEXT = NULL,
+                @billing_address TEXT = NULL,
+                @payment_method VARCHAR(50) = NULL,
+                @notes TEXT = NULL,
+                @order_id INT OUTPUT
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                
+                DECLARE @order_number VARCHAR(20) = dbo.fn_generate_order_number();
+                
+                INSERT INTO orders (order_number, user_id, status, subtotal, tax_amount, 
+                                   shipping_amount, total_amount, shipping_address, 
+                                   billing_address, payment_method, notes)
+                VALUES (@order_number, @user_id, 'pending', 0.00, 0.00, 0.00, 0.00,
+                       @shipping_address, @billing_address, @payment_method, @notes);
+                
+                SET @order_id = SCOPE_IDENTITY();
+                
+                -- Insert initial status history record
+                INSERT INTO order_status_history (order_id, new_status, change_reason)
+                VALUES (@order_id, 'pending', 'Order created');
+                
+                SELECT @order_id as order_id, @order_number as order_number;
+            END
+        </sql>
+        
+        <rollback>
+            <sql>DROP PROCEDURE IF EXISTS sp_create_order</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # Microsoft SQL Server 2019 Developer Edition
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: lab18-sqlserver
+    hostname: lab18-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd123
+      - MSSQL_PID=Developer
+      - MSSQL_AGENT_ENABLED=true
+      - MSSQL_ENABLE_HADR=1
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+      - ./config/sql-server:/docker-entrypoint-initdb.d
+      - ./liquibase/sql:/sql-scripts
+    networks:
+      - lab18-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd123 -Q 'SELECT 1' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # Liquibase service for running migrations
+  liquibase:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.liquibase
+    container_name: lab18-liquibase
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    volumes:
+      - ./liquibase:/liquibase/changelog
+      - ./config:/config
+      - liquibase_logs:/liquibase/logs
+    environment:
+      - LIQUIBASE_COMMAND_URL=jdbc:sqlserver://sqlserver:1433;databaseName=lab18_development;trustServerCertificate=true
+      - LIQUIBASE_COMMAND_USERNAME=sa
+      - LIQUIBASE_COMMAND_PASSWORD=YourStrong@Passw0rd123
+      - LIQUIBASE_COMMAND_CHANGELOG_FILE=changelog/changelogs/db.changelog-master.xml
+      - LIQUIBASE_HUB_MODE=off
+      - LIQUIBASE_LOG_LEVEL=INFO
+    networks:
+      - lab18-network
+    profiles:
+      - migration
+    command: ["update"]
+
+  # SQL Server Management Studio alternative - Azure Data Studio in container
+  # Uncomment if you want a web-based SQL management interface
+  # adminer:
+  #   image: adminer:latest
+  #   container_name: lab18-adminer
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     - ADMINER_DEFAULT_SERVER=sqlserver
+  #   networks:
+  #     - lab18-network
+  #   depends_on:
+  #     - sqlserver
+
+  # Application service (optional - for testing database integration)
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    container_name: lab18-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=sqlserver
+      - DB_PORT=1433
+      - DB_NAME=lab18_development
+      - DB_USER=sa
+      - DB_PASSWORD=YourStrong@Passw0rd123
+      - DB_ENCRYPT=true
+      - DB_TRUST_SERVER_CERTIFICATE=true
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - app_logs:/app/logs
+    networks:
+      - lab18-network
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - app
+
+volumes:
+  sqlserver_data:
+    driver: local
+    name: lab18_sqlserver_data
+  liquibase_logs:
+    driver: local
+    name: lab18_liquibase_logs
+  app_logs:
+    driver: local
+    name: lab18_app_logs
+
+networks:
+  lab18-network:
+    driver: bridge
+    name: lab18-network

@@ -1,0 +1,342 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+
+    <!-- 
+    Changeset 002: Add Products
+    Creates products table and related functionality
+    -->
+
+    <changeSet id="002-1" author="lab18-developer" labels="v1.1.0">
+        <comment>Create products table</comment>
+        <createTable tableName="products">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="PK_products"/>
+            </column>
+            <column name="name" type="varchar(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="text"/>
+            <column name="sku" type="varchar(50)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="UQ_products_sku"/>
+            </column>
+            <column name="category_id" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price" type="decimal(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cost" type="decimal(10,2)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="stock_quantity" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="min_stock_level" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="weight" type="decimal(8,3)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="dimensions" type="varchar(50)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="is_active" type="bit" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_featured" type="bit" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="products"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="002-2" author="lab18-developer" labels="v1.1.0">
+        <comment>Add foreign key constraints to products table</comment>
+        <addForeignKeyConstraint
+            baseTableName="products"
+            baseColumnNames="category_id"
+            referencedTableName="categories"
+            referencedColumnNames="id"
+            constraintName="FK_products_category"/>
+            
+        <addForeignKeyConstraint
+            baseTableName="products"
+            baseColumnNames="created_by"
+            referencedTableName="users"
+            referencedColumnNames="id"
+            constraintName="FK_products_created_by"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="products" constraintName="FK_products_category"/>
+            <dropForeignKeyConstraint baseTableName="products" constraintName="FK_products_created_by"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="002-3" author="lab18-developer" labels="v1.1.0">
+        <comment>Create product_images table</comment>
+        <createTable tableName="product_images">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="PK_product_images"/>
+            </column>
+            <column name="product_id" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="image_url" type="varchar(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="alt_text" type="varchar(200)"/>
+            <column name="is_primary" type="bit" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sort_order" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint
+            baseTableName="product_images"
+            baseColumnNames="product_id"
+            referencedTableName="products"
+            referencedColumnNames="id"
+            constraintName="FK_product_images_product"
+            onDelete="CASCADE"/>
+        
+        <rollback>
+            <dropTable tableName="product_images"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="002-4" author="lab18-developer" labels="v1.1.0">
+        <comment>Create product_attributes table for flexible product properties</comment>
+        <createTable tableName="product_attributes">
+            <column name="id" type="int" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="PK_product_attributes"/>
+            </column>
+            <column name="product_id" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attribute_name" type="varchar(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attribute_value" type="varchar(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="datetime2" defaultValueComputed="GETDATE()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <addForeignKeyConstraint
+            baseTableName="product_attributes"
+            baseColumnNames="product_id"
+            referencedTableName="products"
+            referencedColumnNames="id"
+            constraintName="FK_product_attributes_product"
+            onDelete="CASCADE"/>
+            
+        <addUniqueConstraint
+            tableName="product_attributes"
+            columnNames="product_id, attribute_name"
+            constraintName="UQ_product_attributes_product_name"/>
+        
+        <rollback>
+            <dropTable tableName="product_attributes"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="002-5" author="lab18-developer" labels="v1.1.0">
+        <comment>Create update trigger for products table</comment>
+        <sql>
+            CREATE TRIGGER tr_products_update
+            ON products
+            AFTER UPDATE
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                UPDATE products 
+                SET updated_at = GETDATE()
+                FROM products p
+                INNER JOIN inserted i ON p.id = i.id;
+            END
+        </sql>
+        
+        <rollback>
+            <sql>DROP TRIGGER IF EXISTS tr_products_update</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="002-6" author="lab18-developer" labels="v1.1.0" context="development,testing">
+        <comment>Insert sample products for development and testing</comment>
+        
+        <!-- Electronics Products -->
+        <insert tableName="products">
+            <column name="name" value="Smartphone XYZ"/>
+            <column name="description" value="Latest smartphone with advanced features"/>
+            <column name="sku" value="PHONE-XYZ-001"/>
+            <column name="category_id" valueComputed="(SELECT id FROM categories WHERE name = 'Electronics')"/>
+            <column name="price" value="699.99"/>
+            <column name="cost" value="450.00"/>
+            <column name="stock_quantity" value="50"/>
+            <column name="min_stock_level" value="10"/>
+            <column name="weight" value="0.180"/>
+            <column name="dimensions" value="15.5 x 7.5 x 0.8 cm"/>
+            <column name="is_featured" value="1"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <insert tableName="products">
+            <column name="name" value="Wireless Headphones"/>
+            <column name="description" value="Premium wireless headphones with noise cancellation"/>
+            <column name="sku" value="AUDIO-WH-002"/>
+            <column name="category_id" valueComputed="(SELECT id FROM categories WHERE name = 'Electronics')"/>
+            <column name="price" value="199.99"/>
+            <column name="cost" value="120.00"/>
+            <column name="stock_quantity" value="75"/>
+            <column name="min_stock_level" value="15"/>
+            <column name="weight" value="0.250"/>
+            <column name="dimensions" value="20 x 18 x 8 cm"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <!-- Books -->
+        <insert tableName="products">
+            <column name="name" value="Database Design Fundamentals"/>
+            <column name="description" value="Comprehensive guide to database design and optimization"/>
+            <column name="sku" value="BOOK-DB-003"/>
+            <column name="category_id" valueComputed="(SELECT id FROM categories WHERE name = 'Books')"/>
+            <column name="price" value="49.99"/>
+            <column name="cost" value="25.00"/>
+            <column name="stock_quantity" value="25"/>
+            <column name="min_stock_level" value="5"/>
+            <column name="weight" value="0.800"/>
+            <column name="dimensions" value="23 x 15 x 3 cm"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <!-- Clothing -->
+        <insert tableName="products">
+            <column name="name" value="Cotton T-Shirt"/>
+            <column name="description" value="Comfortable cotton t-shirt in various colors"/>
+            <column name="sku" value="CLOTH-TS-004"/>
+            <column name="category_id" valueComputed="(SELECT id FROM categories WHERE name = 'Clothing')"/>
+            <column name="price" value="24.99"/>
+            <column name="cost" value="8.00"/>
+            <column name="stock_quantity" value="100"/>
+            <column name="min_stock_level" value="20"/>
+            <column name="weight" value="0.200"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin')"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="products">
+                <where>sku IN ('PHONE-XYZ-001', 'AUDIO-WH-002', 'BOOK-DB-003', 'CLOTH-TS-004')</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="002-7" author="lab18-developer" labels="v1.1.0" context="development,testing">
+        <comment>Insert sample product attributes</comment>
+        
+        <!-- Smartphone attributes -->
+        <insert tableName="product_attributes">
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'PHONE-XYZ-001')"/>
+            <column name="attribute_name" value="Color"/>
+            <column name="attribute_value" value="Black"/>
+        </insert>
+        <insert tableName="product_attributes">
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'PHONE-XYZ-001')"/>
+            <column name="attribute_name" value="Storage"/>
+            <column name="attribute_value" value="128GB"/>
+        </insert>
+        <insert tableName="product_attributes">
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'PHONE-XYZ-001')"/>
+            <column name="attribute_name" value="RAM"/>
+            <column name="attribute_value" value="8GB"/>
+        </insert>
+        
+        <!-- Headphones attributes -->
+        <insert tableName="product_attributes">
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'AUDIO-WH-002')"/>
+            <column name="attribute_name" value="Color"/>
+            <column name="attribute_value" value="White"/>
+        </insert>
+        <insert tableName="product_attributes">
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'AUDIO-WH-002')"/>
+            <column name="attribute_name" value="Battery Life"/>
+            <column name="attribute_value" value="30 hours"/>
+        </insert>
+        
+        <!-- T-Shirt attributes -->
+        <insert tableName="product_attributes">
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'CLOTH-TS-004')"/>
+            <column name="attribute_name" value="Size"/>
+            <column name="attribute_value" value="M"/>
+        </insert>
+        <insert tableName="product_attributes">
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'CLOTH-TS-004')"/>
+            <column name="attribute_name" value="Color"/>
+            <column name="attribute_value" value="Blue"/>
+        </insert>
+        <insert tableName="product_attributes">
+            <column name="product_id" valueComputed="(SELECT id FROM products WHERE sku = 'CLOTH-TS-004')"/>
+            <column name="attribute_name" value="Material"/>
+            <column name="attribute_value" value="100% Cotton"/>
+        </insert>
+        
+        <rollback>
+            <delete tableName="product_attributes">
+                <where>product_id IN (
+                    SELECT id FROM products WHERE sku IN ('PHONE-XYZ-001', 'AUDIO-WH-002', 'CLOTH-TS-004')
+                )</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="002-8" author="lab18-developer" labels="v1.1.0">
+        <comment>Add check constraints for data validation</comment>
+        
+        <sql>
+            ALTER TABLE products 
+            ADD CONSTRAINT CK_products_price_positive 
+            CHECK (price > 0)
+        </sql>
+        
+        <sql>
+            ALTER TABLE products 
+            ADD CONSTRAINT CK_products_stock_non_negative 
+            CHECK (stock_quantity >= 0)
+        </sql>
+        
+        <sql>
+            ALTER TABLE products 
+            ADD CONSTRAINT CK_products_min_stock_non_negative 
+            CHECK (min_stock_level >= 0)
+        </sql>
+        
+        <rollback>
+            <sql>ALTER TABLE products DROP CONSTRAINT IF EXISTS CK_products_price_positive</sql>
+            <sql>ALTER TABLE products DROP CONSTRAINT IF EXISTS CK_products_stock_non_negative</sql>
+            <sql>ALTER TABLE products DROP CONSTRAINT IF EXISTS CK_products_min_stock_non_negative</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
