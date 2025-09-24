@@ -1,0 +1,19 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "gitAuthor": "Renovate Bot",
+    "platform": "gitlab",
+    "extends": [
+      "config:base",
+      ":preserveSemverRanges",
+      ":rebaseStalePrs",
+      ":enableVulnerabilityAlertsWithLabel('security')",
+      "group:recommended"
+    ],
+    "enabledManagers": ["pip_requirements"],
+    "constraints": {
+      "python": ">=3.8"
+    },
+    "rebaseWhen": "behind-base-branch",
+    "prHourlyLimit": 0
+}
+  

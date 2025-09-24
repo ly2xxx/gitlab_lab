@@ -157,3 +157,5 @@ Example: `pnpm start r4harry/testrepo1`
 - Vitest for testing
 - Auto-generated schema and import files
 - Docker support for containerized development
+
+https://www.velir.com/ideas/2022/10/20/how-to-automate-dependency-updates-with-renovate
