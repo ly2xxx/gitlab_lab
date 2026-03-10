@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Application Configuration Schema",
+  "description": "Defines all configuration variables for the application across environments",
+  "type": "object",
+  "properties": {
+    "API_URL": {
+      "type": "string",
+      "pattern": "^https?://",
+      "description": "Base URL for the API",
+      "examples": [
+        "https://api.prod.example.com",
+        "https://api.staging.example.com",
+        "http://localhost:3000"
+      ]
+    },
+    "DB_HOST": {
+      "type": "string",
+      "description": "Database hostname",
+      "examples": [
+        "prod-db.example.com",
+        "staging-db.example.com",
+        "localhost"
+      ]
+    },
+    "DB_PORT": {
+      "type": "integer",
+      "default": 5432,
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "Database port"
+    },
+    "DB_NAME": {
+      "type": "string",
+      "default": "myapp",
+      "description": "Database name"
+    },
+    "REDIS_URL": {
+      "type": "string",
+      "pattern": "^redis://",
+      "description": "Redis connection string",
+      "examples": [
+        "redis://prod-redis:6379",
+        "redis://localhost:6379"
+      ]
+    },
+    "LOG_LEVEL": {
+      "type": "string",
+      "enum": ["debug", "info", "warn", "error"],
+      "default": "info",
+      "description": "Application log level"
+    },
+    "MAX_CONNECTIONS": {
+      "type": "integer",
+      "default": 100,
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "Maximum number of concurrent connections"
+    },
+    "FEATURE_NEW_UI": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable the new user interface"
+    },
+    "FEATURE_ANALYTICS": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable analytics tracking"
+    },
+    "SESSION_TIMEOUT": {
+      "type": "integer",
+      "default": 3600,
+      "description": "Session timeout in seconds"
+    },
+    "RATE_LIMIT": {
+      "type": "integer",
+      "default": 100,
+      "description": "API rate limit per minute"
+    },
+    "CORS_ORIGINS": {
+      "type": "string",
+      "default": "*",
+      "description": "Allowed CORS origins (comma-separated)"
+    },
+    "CACHE_TTL": {
+      "type": "integer",
+      "default": 300,
+      "description": "Cache time-to-live in seconds"
+    },
+    "ENV_NAME": {
+      "type": "string",
+      "enum": ["development", "staging", "production"],
+      "description": "Environment identifier"
+    }
+  },
+  "required": [
+    "API_URL",
+    "DB_HOST",
+    "ENV_NAME"
+  ]
+}

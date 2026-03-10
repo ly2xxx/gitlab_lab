@@ -1,0 +1,80 @@
+Configu + GitLab CI Integration Lab
+====================================
+
+Directory Structure:
+--------------------
+
+configu-ci-integration/
+│
+├── 📖 Documentation
+│   ├── README.md              Main overview and quick start
+│   ├── SETUP.md               Step-by-step setup instructions
+│   ├── comparison.md          Detailed Option A vs Option B comparison
+│   ├── INDEX.md               Quick navigation guide
+│   └── STRUCTURE.txt          This file
+│
+├── 🔧 Option A: Export to .env File
+│   └── option-a-env-export/
+│       ├── .gitlab-ci.yml     GitLab CI pipeline (Option A)
+│       ├── config.cfgu.json   Configu schema definition
+│       ├── deploy.sh          Deployment script (executable)
+│       └── app.js             Sample Node.js application
+│
+└── 🚀 Option B: Direct CLI Integration
+    └── option-b-direct-cli/
+        ├── .gitlab-ci.yml     GitLab CI pipeline (Option B)
+        ├── config.cfgu.json   Configu schema definition
+        ├── deploy.sh          Deployment script (executable)
+        └── app.js             Sample Node.js application
+
+File Count: 12 files
+Total Size: ~78 KB
+
+Key Features:
+-------------
+✅ Comprehensive documentation
+✅ Two working CI/CD pipeline examples
+✅ Production-ready deployment scripts
+✅ Feature flag demonstrations
+✅ Multi-environment support (dev/staging/prod)
+✅ Security best practices
+✅ Interactive sample applications
+
+Quick Start:
+------------
+1. Read: README.md
+2. Setup: Follow SETUP.md
+3. Test: Run both options locally
+4. Deploy: Push to GitLab
+
+Decision Guide:
+---------------
+- Docker Compose → Option A
+- Kubernetes/Helm → Option B
+- Simple workflows → Option A
+- Cloud-native → Option B
+
+Documentation Flow:
+-------------------
+INDEX.md (start here)
+  ↓
+README.md (overview)
+  ↓
+SETUP.md (hands-on setup)
+  ↓
+comparison.md (deep dive)
+  ↓
+Try Option A or B locally
+  ↓
+Deploy to GitLab CI
+
+Support:
+--------
+- Full README in each directory
+- Inline comments in all scripts
+- Comprehensive error handling
+- Step-by-step troubleshooting
+
+Created: 2026-03-10
+Author: Master Yang (via Helpful Bob)
+Purpose: Educational lab for Configu + GitLab CI integration

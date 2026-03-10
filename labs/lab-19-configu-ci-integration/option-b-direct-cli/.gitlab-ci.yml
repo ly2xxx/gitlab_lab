@@ -1,0 +1,302 @@
+# Option B: Direct CLI Integration Approach
+# ==========================================
+# This pipeline demonstrates using Configu CLI directly with piped commands
+# and JSON output, without creating intermediate .env files.
+#
+# Benefits:
+# - No file artifacts (better security)
+# - JSON/YAML native (perfect for K8s/Helm)
+# - GitLab CI variables integration
+# - Audit trail (all config fetched via API)
+
+stages:
+  - setup
+  - build
+  - test
+  - deploy
+
+variables:
+  CONFIGU_ORG: "my-organization"
+  CONFIGU_TOKEN: $CONFIGU_API_TOKEN
+
+.install_configu: &install_configu
+  - echo "📦 Installing Configu CLI..."
+  - npm install -g @configu/cli
+  - configu --version
+
+before_script:
+  - *install_configu
+
+# ========================================
+# Development Environment
+# ========================================
+deploy:development:
+  stage: deploy
+  environment:
+    name: development
+    url: https://dev.example.com
+  only:
+    - develop
+  script:
+    - echo "🔧 Deploying to DEVELOPMENT..."
+    
+    # Method 1: Export variables to current shell
+    - echo "📝 Fetching configuration from Configu (export format)..."
+    - configu eval --set "development" --schema "./config.cfgu.json" --format "export" | sh
+    
+    # Now variables are available in current shell
+    - echo "🔍 Verifying configuration..."
+    - echo "API_URL = $API_URL"
+    - echo "DB_HOST = $DB_HOST"
+    - echo "ENV_NAME = $ENV_NAME"
+    
+    # Method 2: Get JSON output for processing
+    - echo "📊 Fetching configuration as JSON..."
+    - configu eval --set "development" --schema "./config.cfgu.json" --format "json" > config.json
+    - cat config.json | jq '.'
+    
+    # Extract specific values with jq
+    - API_ENDPOINT=$(cat config.json | jq -r '.API_URL')
+    - echo "Extracted API endpoint: $API_ENDPOINT"
+    
+    # Run deployment
+    - chmod +x ./deploy.sh
+    - ./deploy.sh
+
+# ========================================
+# Kubernetes/Helm Deployment
+# ========================================
+deploy:k8s:staging:
+  stage: deploy
+  image: alpine/helm:latest
+  environment:
+    name: staging
+    url: https://staging.example.com
+  only:
+    - main
+  script:
+    - echo "☸️  Deploying to Kubernetes (Staging)..."
+    
+    # Export to JSON for Helm values
+    - npm install -g @configu/cli
+    - configu eval --set "staging" --schema "./config.cfgu.json" --format "json" > values.json
+    
+    # Show sanitized values (hide secrets)
+    - cat values.json | jq 'del(.DB_PASSWORD, .API_SECRET)'
+    
+    # Deploy with Helm using JSON values
+    - |
+      helm upgrade --install myapp ./helm-chart \
+        --values values.json \
+        --namespace staging \
+        --create-namespace \
+        --wait \
+        --timeout 5m
+    
+    # Verify deployment
+    - kubectl get pods -n staging
+    - kubectl rollout status deployment/myapp -n staging
+
+# ========================================
+# Production Environment (Direct CLI)
+# ========================================
+deploy:production:
+  stage: deploy
+  environment:
+    name: production
+    url: https://api.example.com
+  only:
+    - tags
+  when: manual
+  script:
+    - echo "🚀 Deploying to PRODUCTION..."
+    
+    # Fetch config as JSON
+    - configu eval --set "production" --schema "./config.cfgu.json" --format "json" > prod-config.json
+    
+    # Validate critical fields before deployment
+    - |
+      echo "✅ Validating production configuration..."
+      API_URL=$(cat prod-config.json | jq -r '.API_URL')
+      DB_HOST=$(cat prod-config.json | jq -r '.DB_HOST')
+      
+      if [ -z "$API_URL" ] || [ "$API_URL" = "null" ]; then
+        echo "❌ ERROR: API_URL not found in config!"
+        exit 1
+      fi
+      
+      if [ -z "$DB_HOST" ] || [ "$DB_HOST" = "null" ]; then
+        echo "❌ ERROR: DB_HOST not found in config!"
+        exit 1
+      fi
+      
+      echo "✅ Validation passed"
+      echo "   API_URL: $API_URL"
+      echo "   DB_HOST: $DB_HOST"
+    
+    # Export to shell for deployment script
+    - configu eval --set "production" --schema "./config.cfgu.json" --format "export" | sh
+    
+    # Deploy
+    - chmod +x ./deploy.sh
+    - ./deploy.sh
+  
+  artifacts:
+    reports:
+      dotenv: prod-config.env  # GitLab can parse this
+    when: on_failure
+
+# ========================================
+# Docker Build with Inline Config
+# ========================================
+build:docker:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "🐳 Building Docker image..."
+    
+    # Get config as JSON
+    - npm install -g @configu/cli
+    - configu eval --set "production" --schema "./config.cfgu.json" --format "json" > config.json
+    
+    # Extract build args
+    - API_URL=$(cat config.json | jq -r '.API_URL')
+    - BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+    
+    # Build with args (no .env file needed)
+    - |
+      docker build \
+        --build-arg API_URL="$API_URL" \
+        --build-arg BUILD_DATE="$BUILD_DATE" \
+        --build-arg VCS_REF="$CI_COMMIT_SHA" \
+        -t myapp:$CI_COMMIT_TAG .
+    
+    - echo "✅ Docker image built: myapp:$CI_COMMIT_TAG"
+
+# ========================================
+# Terraform/IaC Deployment
+# ========================================
+deploy:terraform:
+  stage: deploy
+  image: hashicorp/terraform:latest
+  when: manual
+  script:
+    - echo "🏗️  Deploying infrastructure with Terraform..."
+    
+    # Export config as Terraform variables
+    - npm install -g @configu/cli jq
+    - configu eval --set "production" --schema "./config.cfgu.json" --format "json" > config.json
+    
+    # Convert JSON to terraform.tfvars format
+    - |
+      echo "# Auto-generated from Configu" > terraform.tfvars
+      cat config.json | jq -r 'to_entries | .[] | "\(.key) = \"\(.value)\""' >> terraform.tfvars
+    
+    - cat terraform.tfvars
+    
+    # Run Terraform
+    - terraform init
+    - terraform plan -var-file=terraform.tfvars
+    - terraform apply -var-file=terraform.tfvars -auto-approve
+
+# ========================================
+# Feature Flag Testing
+# ========================================
+test:feature-flags:
+  stage: test
+  script:
+    - echo "🧪 Testing with feature flags..."
+    
+    # Get config as JSON
+    - configu eval --set "test" --schema "./config.cfgu.json" --format "json" > config.json
+    
+    # Check feature flags and run conditional tests
+    - |
+      NEW_UI=$(cat config.json | jq -r '.FEATURE_NEW_UI')
+      ANALYTICS=$(cat config.json | jq -r '.FEATURE_ANALYTICS')
+      
+      if [ "$NEW_UI" = "true" ]; then
+        echo "✅ Running NEW UI tests..."
+        npm run test:new-ui
+      else
+        echo "⏭️  Skipping NEW UI tests (feature disabled)"
+      fi
+      
+      if [ "$ANALYTICS" = "true" ]; then
+        echo "✅ Running ANALYTICS tests..."
+        npm run test:analytics
+      else
+        echo "⏭️  Skipping ANALYTICS tests (feature disabled)"
+      fi
+
+# ========================================
+# Multi-Environment Deployment Matrix
+# ========================================
+.deploy_template: &deploy_template
+  stage: deploy
+  script:
+    - echo "🚀 Deploying to $CI_ENVIRONMENT_NAME..."
+    
+    # Fetch config for current environment
+    - |
+      configu eval \
+        --set "$CI_ENVIRONMENT_NAME" \
+        --schema "./config.cfgu.json" \
+        --format "export" | sh
+    
+    - echo "Configuration loaded for: $ENV_NAME"
+    - echo "API URL: $API_URL"
+    
+    # Deploy
+    - chmod +x ./deploy.sh
+    - ./deploy.sh
+
+deploy:dev:
+  <<: *deploy_template
+  environment:
+    name: development
+  only:
+    - develop
+
+deploy:stage:
+  <<: *deploy_template
+  environment:
+    name: staging
+  only:
+    - main
+  when: manual
+
+deploy:prod:
+  <<: *deploy_template
+  environment:
+    name: production
+  only:
+    - tags
+  when: manual
+
+# ========================================
+# Config Audit Log
+# ========================================
+audit:config:
+  stage: setup
+  when: always
+  script:
+    - echo "📋 Auditing configuration usage..."
+    
+    # Log what config sets are being used
+    - |
+      for env in development staging production; do
+        echo "==================================="
+        echo "Environment: $env"
+        echo "==================================="
+        configu eval --set "$env" --schema "./config.cfgu.json" --format "json" \
+          | jq 'to_entries | .[] | "\(.key): \(.value)"' \
+          | grep -v "PASSWORD\|SECRET\|TOKEN"  # Hide sensitive values
+        echo ""
+      done
+  
+  artifacts:
+    reports:
+      dotenv: config-audit.log
