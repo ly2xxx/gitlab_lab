@@ -1,0 +1,47 @@
+[
+    {
+        "set": "development",
+        "key": "API_URL",
+        "value": "http://localhost:3000"
+    },
+    {
+        "set": "development",
+        "key": "DB_HOST",
+        "value": "localhost"
+    },
+    {
+        "set": "development",
+        "key": "ENV_NAME",
+        "value": "development"
+    },
+    {
+        "set": "staging",
+        "key": "API_URL",
+        "value": "https://api.staging.example.com"
+    },
+    {
+        "set": "staging",
+        "key": "DB_HOST",
+        "value": "staging-db.example.com"
+    },
+    {
+        "set": "staging",
+        "key": "ENV_NAME",
+        "value": "staging"
+    },
+    {
+        "set": "production",
+        "key": "API_URL",
+        "value": "https://api.example.com"
+    },
+    {
+        "set": "production",
+        "key": "DB_HOST",
+        "value": "prod-db.example.com"
+    },
+    {
+        "set": "production",
+        "key": "ENV_NAME",
+        "value": "production"
+    }
+]

@@ -16,12 +16,9 @@ stages:
   - deploy
 
 variables:
-  # Configu organization (set in GitLab CI Variables)
-  CONFIGU_ORG: "my-organization"
-  
-  # Configu token (set as protected/masked variable in GitLab)
-  # Settings → CI/CD → Variables → Add: CONFIGU_TOKEN
-  CONFIGU_TOKEN: $CONFIGU_API_TOKEN
+  # Local Configu store setup
+  CONFIGU_STORE: "configu-json"
+  CONFIGU_CONFIG: "path=config.store.json"
 
 # Install Configu CLI once
 .install_configu: &install_configu
@@ -47,8 +44,8 @@ deploy:development:
     - echo "🔧 Deploying to DEVELOPMENT..."
     
     # Step 1: Export Configu values to .env file
-    - echo "📝 Exporting configuration from Configu..."
-    - configu export --set "development" --schema "./config.cfgu.json" > .env
+    - echo "📝 Exporting configuration from local Configu store..."
+    - configu export --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "development" --schema "./config.cfgu.json" > .env
     
     # Step 2: Verify .env file was created
     - echo "✅ .env file created:"
@@ -95,7 +92,7 @@ deploy:staging:
     - echo "🔧 Deploying to STAGING..."
     
     # Export staging configuration
-    - configu export --set "staging" --schema "./config.cfgu.json" > .env
+    - configu export --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "staging" --schema "./config.cfgu.json" > .env
     - source .env
     
     # Show what's being deployed
@@ -126,7 +123,7 @@ deploy:production:
     - echo "⚠️  WARNING: This is a PRODUCTION deployment!"
     
     # Export production configuration
-    - configu export --set "production" --schema "./config.cfgu.json" > .env
+    - configu export --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "production" --schema "./config.cfgu.json" > .env
     - source .env
     
     # Validate critical variables before deploying
@@ -173,7 +170,7 @@ build:docker:
     - echo "🐳 Building Docker image..."
     
     # Export build-time configuration
-    - configu export --set "production" --schema "./config.cfgu.json" > .env
+    - configu export --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "production" --schema "./config.cfgu.json" > .env
     
     # Build with .env file (Docker 20.10+)
     - docker build --env-file .env -t myapp:$CI_COMMIT_TAG .
@@ -196,7 +193,7 @@ test:integration:
     - echo "🧪 Running integration tests..."
     
     # Export test environment config
-    - configu export --set "test" --schema "./config.cfgu.json" > .env
+    - configu export --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "test" --schema "./config.cfgu.json" > .env
     - source .env
     
     # Check feature flags

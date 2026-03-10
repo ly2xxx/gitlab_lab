@@ -16,8 +16,9 @@ stages:
   - deploy
 
 variables:
-  CONFIGU_ORG: "my-organization"
-  CONFIGU_TOKEN: $CONFIGU_API_TOKEN
+  # Local Configu store setup
+  CONFIGU_STORE: "configu-json"
+  CONFIGU_CONFIG: "path=config.store.json"
 
 .install_configu: &install_configu
   - echo "📦 Installing Configu CLI..."
@@ -41,8 +42,8 @@ deploy:development:
     - echo "🔧 Deploying to DEVELOPMENT..."
     
     # Method 1: Export variables to current shell
-    - echo "📝 Fetching configuration from Configu (export format)..."
-    - configu eval --set "development" --schema "./config.cfgu.json" --format "export" | sh
+    - echo "📝 Fetching configuration from local local store (export format)..."
+    - configu eval --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "development" --schema "./config.cfgu.json" --format "export" | sh
     
     # Now variables are available in current shell
     - echo "🔍 Verifying configuration..."
@@ -52,7 +53,7 @@ deploy:development:
     
     # Method 2: Get JSON output for processing
     - echo "📊 Fetching configuration as JSON..."
-    - configu eval --set "development" --schema "./config.cfgu.json" --format "json" > config.json
+    - configu eval --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "development" --schema "./config.cfgu.json" --format "json" > config.json
     - cat config.json | jq '.'
     
     # Extract specific values with jq
@@ -79,7 +80,7 @@ deploy:k8s:staging:
     
     # Export to JSON for Helm values
     - npm install -g @configu/cli
-    - configu eval --set "staging" --schema "./config.cfgu.json" --format "json" > values.json
+    - configu eval --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "staging" --schema "./config.cfgu.json" --format "json" > values.json
     
     # Show sanitized values (hide secrets)
     - cat values.json | jq 'del(.DB_PASSWORD, .API_SECRET)'
@@ -112,7 +113,7 @@ deploy:production:
     - echo "🚀 Deploying to PRODUCTION..."
     
     # Fetch config as JSON
-    - configu eval --set "production" --schema "./config.cfgu.json" --format "json" > prod-config.json
+    - configu eval --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "production" --schema "./config.cfgu.json" --format "json" > prod-config.json
     
     # Validate critical fields before deployment
     - |
@@ -135,7 +136,7 @@ deploy:production:
       echo "   DB_HOST: $DB_HOST"
     
     # Export to shell for deployment script
-    - configu eval --set "production" --schema "./config.cfgu.json" --format "export" | sh
+    - configu eval --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "production" --schema "./config.cfgu.json" --format "export" | sh
     
     # Deploy
     - chmod +x ./deploy.sh
@@ -159,7 +160,7 @@ build:docker:
     
     # Get config as JSON
     - npm install -g @configu/cli
-    - configu eval --set "production" --schema "./config.cfgu.json" --format "json" > config.json
+    - configu eval --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "production" --schema "./config.cfgu.json" --format "json" > config.json
     
     # Extract build args
     - API_URL=$(cat config.json | jq -r '.API_URL')
@@ -187,7 +188,7 @@ deploy:terraform:
     
     # Export config as Terraform variables
     - npm install -g @configu/cli jq
-    - configu eval --set "production" --schema "./config.cfgu.json" --format "json" > config.json
+    - configu eval --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "production" --schema "./config.cfgu.json" --format "json" > config.json
     
     # Convert JSON to terraform.tfvars format
     - |
@@ -210,7 +211,7 @@ test:feature-flags:
     - echo "🧪 Testing with feature flags..."
     
     # Get config as JSON
-    - configu eval --set "test" --schema "./config.cfgu.json" --format "json" > config.json
+    - configu eval --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "test" --schema "./config.cfgu.json" --format "json" > config.json
     
     # Check feature flags and run conditional tests
     - |
@@ -242,6 +243,8 @@ test:feature-flags:
     # Fetch config for current environment
     - |
       configu eval \
+        --store "$CONFIGU_STORE" \
+        --config "$CONFIGU_CONFIG" \
         --set "$CI_ENVIRONMENT_NAME" \
         --schema "./config.cfgu.json" \
         --format "export" | sh
@@ -291,7 +294,7 @@ audit:config:
         echo "==================================="
         echo "Environment: $env"
         echo "==================================="
-        configu eval --set "$env" --schema "./config.cfgu.json" --format "json" \
+        configu eval --store "$CONFIGU_STORE" --config "$CONFIGU_CONFIG" --set "$env" --schema "./config.cfgu.json" --format "json" \
           | jq 'to_entries | .[] | "\(.key): \(.value)"' \
           | grep -v "PASSWORD\|SECRET\|TOKEN"  # Hide sensitive values
         echo ""
