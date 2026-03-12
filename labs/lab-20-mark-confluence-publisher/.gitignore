@@ -1,0 +1,30 @@
+# Confluence Publisher - Git Ignore
+
+# Credentials
+.env
+*.token
+credentials.txt
+secrets/
+
+# mark binary
+mark
+mark.exe
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+.temp/
