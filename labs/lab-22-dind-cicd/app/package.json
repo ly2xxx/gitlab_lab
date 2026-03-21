@@ -1,0 +1,20 @@
+{
+  "name": "dind-lab-app",
+  "version": "1.0.0",
+  "description": "Sample Node.js app for Docker-in-Docker CI/CD lab",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["docker", "dind", "cicd", "gitlab"],
+  "author": "GitLab Lab",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

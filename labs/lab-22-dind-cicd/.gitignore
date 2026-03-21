@@ -1,0 +1,25 @@
+# Node modules
+app/node_modules/
+app/package-lock.json
+
+# Docker volumes
+dind-data/
+certs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local

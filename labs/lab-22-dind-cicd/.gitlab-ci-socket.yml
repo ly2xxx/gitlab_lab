@@ -1,0 +1,186 @@
+# ================================================================================
+# GitLab CI/CD Configuration - Docker Socket Mount Approach
+# ================================================================================
+#
+# Pros:
+#   ⚡ Fastest approach (no daemon startup delay)
+#   💾 Shares host's Docker image cache (faster builds)
+#   🎯 Direct access to host Docker daemon
+#
+# Cons:
+#   🚨 Security risk - full control of host Docker daemon
+#   ⚠️  No isolation between jobs
+#   🔓 Can see/control ALL containers on host
+#   ❌ Not suitable for untrusted code
+#
+# Use when:
+#   - Self-hosted private runners only
+#   - Trusted team and code only
+#   - Performance is critical
+#   - Single-tenant environment
+#
+# ⚠️  SECURITY WARNING:
+# This approach gives the CI job FULL CONTROL over the host Docker daemon.
+# Malicious code could:
+#   - See all containers from other projects
+#   - Delete production containers
+#   - Mine cryptocurrency in hidden containers
+#   - Exfiltrate sensitive data
+# Only use on private runners with trusted code!
+# ================================================================================
+
+variables:
+  # No DOCKER_HOST needed - using local Unix socket
+  DOCKER_DRIVER: overlay2
+  
+  # Image naming
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:socket-$CI_COMMIT_SHORT_SHA
+  IMAGE_LATEST: $CI_REGISTRY_IMAGE:socket-latest
+
+stages:
+  - security-check
+  - build
+  - test
+  - push
+
+# ================================================================================
+# Stage 0: Security Check (Demonstrate socket access)
+# ================================================================================
+security-check:socket:
+  stage: security-check
+  image: docker:24-cli
+  script:
+    - echo "🔍 Demonstrating Docker socket access..."
+    - echo "⚠️  This job can see ALL containers on the host:"
+    - docker ps -a  # Shows containers from ALL projects!
+    - echo ""
+    - echo "⚠️  This job can see ALL images on the host:"
+    - docker images  # Shows images from ALL projects!
+    - echo ""
+    - echo "💡 Notice: No 'sleep' delay needed - Docker daemon is instantly ready!"
+    - docker info
+  tags:
+    - docker-socket  # Requires runner with mounted socket
+  allow_failure: true  # Don't block pipeline if this fails
+
+# ================================================================================
+# Stage 1: Build Docker Image
+# ================================================================================
+build:socket:
+  stage: build
+  image: docker:24-cli
+  # NO services needed! Uses host Docker via mounted socket
+  before_script:
+    - echo "⚡ Docker socket approach - instant daemon access!"
+    - docker info  # Immediately ready (no sleep needed)
+  script:
+    - echo "🔨 Building Docker image with socket mount..."
+    - cd app
+    - |
+      docker build \
+        --tag $IMAGE_TAG \
+        --tag $IMAGE_LATEST \
+        --label "method=socket-mount" \
+        --label "git.commit=$CI_COMMIT_SHA" \
+        .
+    - echo "✅ Build complete!"
+    - docker images | grep $CI_REGISTRY_IMAGE
+  after_script:
+    - echo "⏱️  Build time: $CI_JOB_DURATION seconds"
+    - echo "💡 Compare this to DinD approach (should be ~5-10s faster)"
+  tags:
+    - docker-socket
+  only:
+    - branches
+
+# ================================================================================
+# Stage 2: Test the Built Image
+# ================================================================================
+test:socket:
+  stage: test
+  image: docker:24-cli
+  before_script:
+    - docker info  # Instant access
+  script:
+    - echo "🧪 Testing Docker image with socket mount..."
+    - cd app
+    
+    # Rebuild for testing
+    - docker build -t test-app:socket .
+    
+    # Start container
+    - echo "🚀 Starting test container..."
+    - docker run -d --name test-container-socket -p 3000:3000 test-app:socket
+    
+    # Wait briefly
+    - sleep 2
+    
+    # Verify
+    - echo "📋 Container status:"
+    - docker ps | grep test-container-socket
+    
+    # Logs
+    - echo "📜 Container logs:"
+    - docker logs test-container-socket
+    
+    # Health check
+    - docker exec test-container-socket node -e "require('http').get('http://localhost:3000', (res) => { console.log('✅ Health check passed'); process.exit(res.statusCode === 200 ? 0 : 1); })"
+  after_script:
+    # Cleanup is CRITICAL with socket mount!
+    - echo "🧹 Cleaning up test container..."
+    - docker stop test-container-socket || true
+    - docker rm test-container-socket || true
+    - echo "⚠️  Note: With socket mount, you MUST clean up manually!"
+    - echo "DinD automatically cleans up when daemon stops."
+  tags:
+    - docker-socket
+  only:
+    - branches
+
+# ================================================================================
+# Stage 3: Push to Container Registry
+# ================================================================================
+push:socket:
+  stage: push
+  image: docker:24-cli
+  before_script:
+    - echo "🔐 Logging into GitLab Container Registry..."
+    - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+  script:
+    - echo "📤 Pushing images to registry..."
+    - cd app
+    - docker build -t $IMAGE_TAG -t $IMAGE_LATEST .
+    - docker push $IMAGE_TAG
+    - docker push $IMAGE_LATEST
+    - echo "✅ Images pushed successfully!"
+  after_script:
+    - echo "🧹 Cleaning up local images to save space..."
+    - docker rmi $IMAGE_TAG || true
+    - docker rmi $IMAGE_LATEST || true
+  tags:
+    - docker-socket
+  only:
+    - main
+    - master
+
+# ================================================================================
+# Configuration Example: How to Set Up Socket Mount Runner
+# ================================================================================
+# Add this to your GitLab Runner config.toml:
+#
+# [[runners]]
+#   name = "docker-socket-runner"
+#   url = "https://gitlab.com/"
+#   token = "YOUR_RUNNER_TOKEN"
+#   executor = "docker"
+#   [runners.docker]
+#     tls_verify = false
+#     image = "docker:24-cli"
+#     privileged = false  # No privileged mode needed!
+#     disable_cache = false
+#     volumes = ["/var/run/docker.sock:/var/run/docker.sock", "/cache"]
+#     #          ^^^ This mounts the host Docker socket ^^^
+#   [runners.cache]
+#     [runners.cache.s3]
+#     [runners.cache.gcs]
+# ================================================================================

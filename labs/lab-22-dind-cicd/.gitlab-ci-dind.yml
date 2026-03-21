@@ -1,0 +1,177 @@
+# ================================================================================
+# GitLab CI/CD Configuration - Docker-in-Docker (DinD) Approach
+# ================================================================================
+#
+# Pros:
+#   ✅ Full isolation between jobs
+#   ✅ Clean state for each build
+#   ✅ Safe for multi-tenant environments
+#   ✅ No cross-contamination between projects
+#
+# Cons:
+#   ⏱️  Slower startup (~5-10 seconds for daemon init)
+#   ⚠️  Requires --privileged mode on runner
+#   💾 More resource intensive (nested Docker daemon)
+#
+# Use when:
+#   - Running on shared GitLab.com runners
+#   - Building untrusted code
+#   - Need guaranteed isolation
+# ================================================================================
+
+variables:
+  # Configure Docker client to connect to DinD service
+  DOCKER_HOST: tcp://docker:2376
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_TLS_VERIFY: 1
+  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  
+  # Image naming
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  IMAGE_LATEST: $CI_REGISTRY_IMAGE:latest
+
+stages:
+  - build
+  - test
+  - push
+  - cleanup
+
+# ================================================================================
+# Stage 1: Build Docker Image
+# ================================================================================
+build:dind:
+  stage: build
+  image: docker:24-cli  # Docker CLI only (daemon comes from service)
+  services:
+    - docker:24-dind  # This starts the nested Docker daemon
+  before_script:
+    - echo "📦 Waiting for Docker daemon to initialize..."
+    - sleep 5  # Give DinD time to start
+    - docker info  # Verify daemon is ready
+    - echo "✅ Docker daemon ready!"
+  script:
+    - echo "🔨 Building Docker image with DinD..."
+    - cd app
+    - |
+      docker build \
+        --tag $IMAGE_TAG \
+        --tag $IMAGE_LATEST \
+        --label "git.commit=$CI_COMMIT_SHA" \
+        --label "git.branch=$CI_COMMIT_REF_NAME" \
+        --label "pipeline.id=$CI_PIPELINE_ID" \
+        .
+    - echo "✅ Build complete!"
+    - docker images | grep $CI_REGISTRY_IMAGE
+  tags:
+    - docker  # Use runner with Docker executor
+  only:
+    - branches
+    - tags
+
+# ================================================================================
+# Stage 2: Test the Built Image
+# ================================================================================
+test:dind:
+  stage: test
+  image: docker:24-cli
+  services:
+    - docker:24-dind
+  before_script:
+    - sleep 5  # Wait for DinD daemon
+    - docker info
+  script:
+    - echo "🧪 Testing Docker image..."
+    - cd app
+    
+    # Rebuild image for testing (in real scenario, would use artifacts/registry)
+    - docker build -t test-app:$CI_COMMIT_SHORT_SHA .
+    
+    # Start container in detached mode
+    - echo "🚀 Starting test container..."
+    - docker run -d --name test-container -p 3000:3000 test-app:$CI_COMMIT_SHORT_SHA
+    
+    # Wait for app to start
+    - echo "⏳ Waiting for application to start..."
+    - sleep 3
+    
+    # Verify container is running
+    - echo "📋 Container status:"
+    - docker ps | grep test-container
+    
+    # Check logs
+    - echo "📜 Container logs:"
+    - docker logs test-container
+    
+    # Test health check
+    - echo "🏥 Testing health endpoint..."
+    - docker exec test-container node -e "require('http').get('http://localhost:3000', (res) => { console.log('Health check:', res.statusCode); process.exit(res.statusCode === 200 ? 0 : 1); })"
+    
+    # Cleanup
+    - echo "🧹 Cleaning up test container..."
+    - docker stop test-container
+    - docker rm test-container
+    
+    - echo "✅ All tests passed!"
+  tags:
+    - docker
+  only:
+    - branches
+
+# ================================================================================
+# Stage 3: Push to Container Registry
+# ================================================================================
+push:dind:
+  stage: push
+  image: docker:24-cli
+  services:
+    - docker:24-dind
+  before_script:
+    - sleep 5
+    - docker info
+    - echo "🔐 Logging into GitLab Container Registry..."
+    - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+  script:
+    - echo "📤 Pushing images to registry..."
+    - cd app
+    - docker build -t $IMAGE_TAG -t $IMAGE_LATEST .
+    - docker push $IMAGE_TAG
+    - docker push $IMAGE_LATEST
+    - echo "✅ Images pushed successfully!"
+    - echo "📦 Image: $IMAGE_TAG"
+    - echo "📦 Image: $IMAGE_LATEST"
+  tags:
+    - docker
+  only:
+    - main
+    - master
+    - tags
+
+# ================================================================================
+# Stage 4: Cleanup (Optional - demonstrates DinD isolation)
+# ================================================================================
+cleanup:dind:
+  stage: cleanup
+  image: docker:24-cli
+  services:
+    - docker:24-dind
+  before_script:
+    - sleep 5
+  script:
+    - echo "🧹 Demonstrating DinD isolation..."
+    - echo "Each job gets its own Docker daemon, so cleanup is automatic!"
+    - docker ps -a  # Show no leftover containers from previous jobs
+    - docker images  # Show only images from current job
+    - echo "✅ DinD ensures clean state for every pipeline run!"
+  when: always
+  tags:
+    - docker
+  only:
+    - branches
+
+# ================================================================================
+# Performance Tracking
+# ================================================================================
+.timing_template: &timing
+  after_script:
+    - echo "⏱️  Job duration: $CI_JOB_DURATION seconds"
+    - echo "Pipeline started: $CI_PIPELINE_CREATED_AT"

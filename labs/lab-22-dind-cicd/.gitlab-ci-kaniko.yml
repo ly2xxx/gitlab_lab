@@ -1,0 +1,203 @@
+# ================================================================================
+# GitLab CI/CD Configuration - Kaniko (Daemonless) Approach
+# ================================================================================
+#
+# Pros:
+#   ✅ No Docker daemon needed
+#   🔒 Rootless execution (most secure)
+#   ⚡ No privileged mode required
+#   🏗️  Works in Kubernetes without security compromises
+#   💾 Built-in layer caching
+#
+# Cons:
+#   ❌ Build only - cannot run containers (no `docker run`)
+#   ⚠️  Some Dockerfile features unsupported
+#   📚 Different CLI (not `docker build`)
+#   🐛 Less mature than Docker (occasional edge cases)
+#
+# Use when:
+#   - Deploying on Kubernetes
+#   - Security is paramount
+#   - Only need to build images (not test containers)
+#   - Rootless environments required
+# ================================================================================
+
+variables:
+  # Image naming
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:kaniko-$CI_COMMIT_SHORT_SHA
+  IMAGE_LATEST: $CI_REGISTRY_IMAGE:kaniko-latest
+
+stages:
+  - build
+  - verify
+
+# ================================================================================
+# Stage 1: Build with Kaniko
+# ================================================================================
+build:kaniko:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.1-debug
+    entrypoint: [""]  # Override default entrypoint to run custom commands
+  before_script:
+    - echo "🚀 Building with Kaniko (no Docker daemon!)"
+    - echo "📋 Kaniko version:"
+    - /kaniko/executor version
+    
+    # Setup authentication for GitLab Container Registry
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    
+    - echo "✅ Authentication configured"
+  script:
+    - echo "🔨 Building image with Kaniko..."
+    - |
+      /kaniko/executor \
+        --context "${CI_PROJECT_DIR}/app" \
+        --dockerfile "${CI_PROJECT_DIR}/app/Dockerfile" \
+        --destination "${IMAGE_TAG}" \
+        --destination "${IMAGE_LATEST}" \
+        --cache=true \
+        --cache-repo="${CI_REGISTRY_IMAGE}/cache" \
+        --cache-ttl=168h \
+        --cleanup \
+        --verbosity=info \
+        --label="method=kaniko" \
+        --label="git.commit=${CI_COMMIT_SHA}" \
+        --label="pipeline.id=${CI_PIPELINE_ID}"
+    
+    - echo "✅ Image built and pushed successfully!"
+    - echo "📦 Image: ${IMAGE_TAG}"
+    - echo "📦 Image: ${IMAGE_LATEST}"
+  after_script:
+    - echo "⏱️  Build time: $CI_JOB_DURATION seconds"
+    - echo "💡 Kaniko builds directly to registry (no local Docker daemon)"
+  tags:
+    - docker  # Regular runner (no special configuration needed!)
+  only:
+    - branches
+    - tags
+
+# ================================================================================
+# Stage 2: Verify Image in Registry
+# ================================================================================
+verify:kaniko:
+  stage: verify
+  image: curlimages/curl:latest
+  before_script:
+    - echo "🔍 Verifying image was pushed to registry..."
+  script:
+    # Use GitLab Container Registry API to verify image exists
+    - |
+      RESPONSE=$(curl -s -w "%{http_code}" -o /dev/null \
+        --header "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/registry/repositories")
+    
+    - echo "Registry API response: ${RESPONSE}"
+    
+    - |
+      if [ "${RESPONSE}" = "200" ]; then
+        echo "✅ Image verified in registry!"
+      else
+        echo "❌ Failed to verify image"
+        exit 1
+      fi
+    
+    - echo "💡 Note: Kaniko cannot run containers for testing"
+    - echo "For testing, pull and run the image separately or use DinD/socket approaches"
+  tags:
+    - docker
+  only:
+    - branches
+
+# ================================================================================
+# Optional: Build with Custom Kaniko Arguments
+# ================================================================================
+build:kaniko-advanced:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.1-debug
+    entrypoint: [""]
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+  script:
+    - echo "🔨 Advanced Kaniko build with custom options..."
+    - |
+      /kaniko/executor \
+        --context "${CI_PROJECT_DIR}/app" \
+        --dockerfile "${CI_PROJECT_DIR}/app/Dockerfile" \
+        --destination "${IMAGE_TAG}-advanced" \
+        --cache=true \
+        --compressed-caching=false \
+        --snapshot-mode=redo \
+        --use-new-run \
+        --build-arg NODE_ENV=production \
+        --label="build.type=advanced" \
+        --reproducible
+    
+    - echo "✅ Advanced build complete!"
+  when: manual  # Only run when manually triggered
+  tags:
+    - docker
+  only:
+    - branches
+
+# ================================================================================
+# Comparison: Kaniko vs Docker Build Times
+# ================================================================================
+# Typical performance comparison:
+#
+# | Method    | First Build | Cached Build | Notes                        |
+# |-----------|-------------|--------------|------------------------------|
+# | DinD      | ~30s        | ~20s         | +5-10s daemon startup        |
+# | Socket    | ~20s        | ~10s         | Instant daemon, shared cache |
+# | Kaniko    | ~25s        | ~15s         | Layer caching via registry   |
+#
+# Kaniko's caching is slower than Docker's local cache but faster than
+# rebuilding from scratch. It stores layers in the container registry.
+# ================================================================================
+
+# ================================================================================
+# Limitations: What Kaniko Cannot Do
+# ================================================================================
+# 1. Cannot run containers:
+#    ❌ docker run --name test myapp
+#    Solution: Use separate stage with DinD or deploy to test environment
+#
+# 2. Cannot use certain Dockerfile features:
+#    ❌ --network=host
+#    ❌ COPY --from=<container> (only supports stage names)
+#    Solution: Restructure Dockerfile to use multi-stage builds properly
+#
+# 3. Cannot interact with Docker daemon:
+#    ❌ docker ps, docker images, etc.
+#    Solution: Use registry APIs or container orchestration tools
+#
+# 4. Cannot build images that require privileged mode:
+#    ❌ Dockerfiles that need device access
+#    Solution: Use DinD approach or refactor image
+# ================================================================================
+
+# ================================================================================
+# Example: Combining Kaniko with DinD for Testing
+# ================================================================================
+# Use Kaniko for secure building, DinD for testing:
+#
+# build:
+#   stage: build
+#   image: gcr.io/kaniko-project/executor
+#   script:
+#     - /kaniko/executor --context . --destination $CI_REGISTRY_IMAGE:test
+#
+# test:
+#   stage: test
+#   image: docker:24-cli
+#   services:
+#     - docker:24-dind
+#   script:
+#     - docker pull $CI_REGISTRY_IMAGE:test
+#     - docker run $CI_REGISTRY_IMAGE:test npm test
+#
+# This gives you security during build, isolation during test!
+# ================================================================================

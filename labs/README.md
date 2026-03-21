@@ -61,6 +61,14 @@ Each lab builds upon previous concepts and includes:
 - Learn: Child pipelines, matrix builds, dynamic workflows
 - Outcome: Complex pipeline orchestration and optimization
 
+### 🔬 **Specialized Topics** (Deep Dives)
+
+**[Lab 22: Docker-in-Docker for CI/CD](./lab-22-dind-cicd/)**
+- Duration: ~60 minutes
+- Learn: DinD, socket mount, Kaniko, security vs performance trade-offs
+- Outcome: Mastery of containerized build approaches with hands-on comparison
+- **NEW!** Includes local testing with docker-compose and comprehensive security analysis
+
 ## 💻 Quick Start
 
 ### 1. Choose Your Starting Point

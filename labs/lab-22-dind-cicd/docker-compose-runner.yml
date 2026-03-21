@@ -1,0 +1,209 @@
+# ================================================================================
+# Docker Compose for Local GitLab Runner Testing
+# ================================================================================
+# This compose file demonstrates both DinD and Socket Mount approaches locally
+#
+# Usage:
+#   docker-compose -f docker-compose-runner.yml up dind-demo     # Test DinD
+#   docker-compose -f docker-compose-runner.yml up socket-demo   # Test Socket
+#
+# ================================================================================
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # DinD Approach - Nested Docker Daemon
+  # ============================================================================
+  dind-service:
+    image: docker:24-dind
+    container_name: dind-daemon
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    volumes:
+      - dind-certs-ca:/certs/ca
+      - dind-certs-client:/certs/client
+      - dind-data:/var/lib/docker
+    networks:
+      - ci-network
+
+  dind-demo:
+    image: docker:24-cli
+    container_name: dind-builder
+    depends_on:
+      - dind-service
+    environment:
+      - DOCKER_HOST=tcp://dind-service:2376
+      - DOCKER_TLS_CERTDIR=/certs
+      - DOCKER_TLS_VERIFY=1
+      - DOCKER_CERT_PATH=/certs/client
+    volumes:
+      - dind-certs-client:/certs/client:ro
+      - ./app:/app:ro
+    networks:
+      - ci-network
+    command: >
+      sh -c "
+        echo '🐳 Docker-in-Docker Demo' &&
+        echo '⏳ Waiting for DinD daemon to start...' &&
+        sleep 10 &&
+        docker info &&
+        echo '' &&
+        echo '🔨 Building image with DinD...' &&
+        cd /app &&
+        docker build -t dind-demo:latest . &&
+        echo '' &&
+        echo '✅ Build successful! Images:' &&
+        docker images &&
+        echo '' &&
+        echo '🧪 Testing container...' &&
+        docker run -d --name test-app -p 3000:3000 dind-demo:latest &&
+        sleep 3 &&
+        docker ps &&
+        docker logs test-app &&
+        echo '' &&
+        echo '🧹 Cleanup...' &&
+        docker stop test-app &&
+        docker rm test-app &&
+        echo '' &&
+        echo '✅ DinD demo complete!'
+      "
+
+  # ============================================================================
+  # Socket Mount Approach - Uses Host Docker
+  # ============================================================================
+  socket-demo:
+    image: docker:24-cli
+    container_name: socket-builder
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./app:/app:ro
+    command: >
+      sh -c "
+        echo '⚡ Docker Socket Mount Demo' &&
+        echo '✅ Instant Docker access (no wait needed)' &&
+        docker info &&
+        echo '' &&
+        echo '🔨 Building image with socket mount...' &&
+        cd /app &&
+        docker build -t socket-demo:latest . &&
+        echo '' &&
+        echo '✅ Build successful! Images:' &&
+        docker images | grep socket-demo &&
+        echo '' &&
+        echo '🧪 Testing container...' &&
+        docker run -d --name test-socket -p 3001:3000 socket-demo:latest &&
+        sleep 3 &&
+        docker ps | grep test-socket &&
+        docker logs test-socket &&
+        echo '' &&
+        echo '🧹 Cleanup...' &&
+        docker stop test-socket &&
+        docker rm test-socket &&
+        docker rmi socket-demo:latest &&
+        echo '' &&
+        echo '✅ Socket mount demo complete!' &&
+        echo '' &&
+        echo '⚠️  SECURITY WARNING: This container has full control of host Docker!' &&
+        echo 'It can see and control ALL containers on your machine.'
+      "
+
+  # ============================================================================
+  # Comparison Demo - Runs Both and Compares
+  # ============================================================================
+  comparison:
+    image: docker:24-cli
+    container_name: comparison-demo
+    depends_on:
+      - dind-service
+    environment:
+      - DOCKER_HOST=tcp://dind-service:2376
+      - DOCKER_TLS_CERTDIR=/certs
+      - DOCKER_TLS_VERIFY=1
+      - DOCKER_CERT_PATH=/certs/client
+    volumes:
+      - dind-certs-client:/certs/client:ro
+      - /var/run/docker.sock:/var/run/docker.sock.host
+      - ./app:/app:ro
+    networks:
+      - ci-network
+    command: >
+      sh -c "
+        echo '📊 DinD vs Socket Mount Comparison' &&
+        echo '========================================' &&
+        echo '' &&
+        
+        echo '⏱️  Test 1: Daemon Startup Time' &&
+        echo '--------------------------------' &&
+        START_DIND=$$(date +%s) &&
+        sleep 10 &&
+        docker info > /dev/null 2>&1 &&
+        END_DIND=$$(date +%s) &&
+        DIND_TIME=$$((END_DIND - START_DIND)) &&
+        echo 'DinD startup: '$$DIND_TIME' seconds' &&
+        echo '' &&
+        
+        echo '⏱️  Test 2: Build Time Comparison' &&
+        echo '--------------------------------' &&
+        echo 'Building with DinD...' &&
+        START_BUILD=$$(date +%s) &&
+        cd /app && docker build -q -t dind-test . > /dev/null &&
+        END_BUILD=$$(date +%s) &&
+        DIND_BUILD=$$((END_BUILD - START_BUILD)) &&
+        echo 'DinD build: '$$DIND_BUILD' seconds' &&
+        echo '' &&
+        
+        echo 'Building with socket mount...' &&
+        START_SOCKET=$$(date +%s) &&
+        DOCKER_HOST=unix:///var/run/docker.sock.host docker build -q -t socket-test /app > /dev/null &&
+        END_SOCKET=$$(date +%s) &&
+        SOCKET_BUILD=$$((END_SOCKET - START_SOCKET)) &&
+        echo 'Socket build: '$$SOCKET_BUILD' seconds' &&
+        echo '' &&
+        
+        echo '📊 Results Summary' &&
+        echo '========================================' &&
+        echo 'DinD:   Startup ('$$DIND_TIME's) + Build ('$$DIND_BUILD's) = Total '$$((DIND_TIME + DIND_BUILD))'s' &&
+        echo 'Socket: Startup (0s) + Build ('$$SOCKET_BUILD's) = Total '$$SOCKET_BUILD's' &&
+        echo '' &&
+        SPEEDUP=$$((((DIND_TIME + DIND_BUILD - SOCKET_BUILD) * 100) / (DIND_TIME + DIND_BUILD))) &&
+        echo '⚡ Socket mount is ~'$$SPEEDUP'% faster' &&
+        echo '' &&
+        
+        echo '🔒 Security Trade-offs' &&
+        echo '========================================' &&
+        echo 'DinD:   ⭐⭐⭐⭐ (Isolated, requires privileged)' &&
+        echo 'Socket: ⭐⭐   (Full host access, fastest)' &&
+        echo '' &&
+        
+        echo '✅ Comparison complete!'
+      "
+
+volumes:
+  dind-certs-ca:
+  dind-certs-client:
+  dind-data:
+
+networks:
+  ci-network:
+    driver: bridge
+
+# ================================================================================
+# Quick Start Commands
+# ================================================================================
+#
+# Test DinD approach:
+#   docker-compose -f docker-compose-runner.yml up dind-demo
+#
+# Test Socket approach:
+#   docker-compose -f docker-compose-runner.yml up socket-demo
+#
+# Run comparison:
+#   docker-compose -f docker-compose-runner.yml up comparison
+#
+# Clean up everything:
+#   docker-compose -f docker-compose-runner.yml down -v
+#   docker rmi dind-demo:latest socket-demo:latest 2>/dev/null || true
+#
+# ================================================================================
