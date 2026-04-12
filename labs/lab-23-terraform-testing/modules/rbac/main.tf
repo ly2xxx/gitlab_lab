@@ -133,8 +133,8 @@ resource "aws_iam_role" "application_role" {
           }
           Action = "sts:AssumeRole"
           Condition = {
-            Bool              = { "aws:MultiFactorAuthPresent" = "true" }
-            StringEquals      = { "sts:ExternalId" = "${var.environment}-${var.application_name}" }
+            Bool         = { "aws:MultiFactorAuthPresent" = "true" }
+            StringEquals = { "sts:ExternalId" = "${var.environment}-${var.application_name}" }
           }
         }
       ] : []

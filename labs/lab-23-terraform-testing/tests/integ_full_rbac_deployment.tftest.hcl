@@ -86,10 +86,10 @@ variables {
     },
   ]
 
-  enable_permission_boundary = true   # mandatory for prod
+  enable_permission_boundary = true # mandatory for prod
 
-  developer_readonly_services   = ["s3", "dynamodb", "cloudwatch", "logs", "xray"]
-  admin_managed_policy_arns     = ["arn:aws:iam::aws:policy/ReadOnlyAccess"]
+  developer_readonly_services = ["s3", "dynamodb", "cloudwatch", "logs", "xray"]
+  admin_managed_policy_arns   = ["arn:aws:iam::aws:policy/ReadOnlyAccess"]
 }
 
 # ------------------------------------------------------------------

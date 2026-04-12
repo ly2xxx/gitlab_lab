@@ -48,13 +48,13 @@ mock_provider "aws" {
 }
 
 variables {
-  environment      = "dev"
-  application_name = "inventory"
-  aws_region       = "us-east-1"
-  app_permissions  = []
-  enable_permission_boundary      = true
-  developer_readonly_services     = ["s3", "ec2", "rds"]
-  admin_managed_policy_arns       = ["arn:aws:iam::aws:policy/ReadOnlyAccess"]
+  environment                 = "dev"
+  application_name            = "inventory"
+  aws_region                  = "us-east-1"
+  app_permissions             = []
+  enable_permission_boundary  = true
+  developer_readonly_services = ["s3", "ec2", "rds"]
+  admin_managed_policy_arns   = ["arn:aws:iam::aws:policy/ReadOnlyAccess"]
 }
 
 # ------------------------------------------------------------------
