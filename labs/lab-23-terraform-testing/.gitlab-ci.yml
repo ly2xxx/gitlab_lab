@@ -18,7 +18,7 @@ variables:
   TF_VERSION:          "1.7.5"
   TF_LOG:              ""                                     # Set to DEBUG to troubleshoot
   TF_PLUGIN_CACHE_DIR: "${CI_PROJECT_DIR}/.terraform.d/plugin-cache"
-  LAB_DIR:             "labs/lab-23-terraform-testing"
+  LAB_DIR:             "."   # root of the repo — set to "labs/lab-23-terraform-testing" if using via GitLab include from the monorepo
   # Controls which test suite runs on merge requests vs main
   RUN_INTEGRATION_ON:  "main"
 
@@ -26,7 +26,9 @@ variables:
 # Global defaults – every job inherits these unless overridden
 # ─────────────────────────────────────────────────────────────────────────────
 default:
-  image: hashicorp/terraform:${TF_VERSION}
+  image: 
+    name: hashicorp/terraform:${TF_VERSION}
+    entrypoint: [""]
   before_script:
     - cd ${LAB_DIR}
     - mkdir -p "${TF_PLUGIN_CACHE_DIR}"
@@ -92,7 +94,9 @@ security:tfsec:
   stage: security
   needs: []      # run in parallel with validate — no ordering dependency
   # tfsec image ships its own binary; override the terraform default image
-  image: aquasec/tfsec:latest
+  image: 
+    name: aquasec/tfsec:latest
+    entrypoint: [""]
   before_script:
     - echo "==> tfsec version $(tfsec --version)"
   script:
@@ -129,10 +133,7 @@ test:unit:naming:
     - terraform init -backend=false -input=false
     - echo ""
     - echo "==> Running unit test naming_convention"
-    - terraform test
-        -filter=tests/unit/naming_convention.tftest.hcl
-        -verbose
-        -json | tee test-unit-naming.jsonl
+    - terraform test -filter=tests/unit_naming_convention.tftest.hcl -verbose -json | tee test-unit-naming.jsonl
     - echo "Naming convention unit tests passed."
   after_script:
     - cd ${LAB_DIR}
@@ -162,10 +163,7 @@ test:unit:boundary:
     - terraform init -backend=false -input=false
     - echo ""
     - echo "==> Running unit test permission_boundary"
-    - terraform test
-        -filter=tests/unit/permission_boundary.tftest.hcl
-        -verbose
-        -json | tee test-unit-boundary.jsonl
+    - terraform test -filter=tests/unit_permission_boundary.tftest.hcl -verbose -json | tee test-unit-boundary.jsonl
     - echo "Permission boundary unit tests passed."
   after_script:
     - cd ${LAB_DIR}
@@ -194,10 +192,7 @@ test:unit:rbac-separation:
     - terraform init -backend=false -input=false
     - echo ""
     - echo "==> Running unit test rbac_separation"
-    - terraform test
-        -filter=tests/unit/rbac_separation.tftest.hcl
-        -verbose
-        -json | tee test-unit-rbac.jsonl
+    - terraform test -filter=tests/unit_rbac_separation.tftest.hcl -verbose -json | tee test-unit-rbac.jsonl
     - echo "RBAC separation unit tests passed."
   after_script:
     - cd ${LAB_DIR}
@@ -242,10 +237,7 @@ test:integ:full-rbac:
     - terraform init -backend=false -input=false
     - echo ""
     - echo "==> Running integration test full_rbac_deployment"
-    - terraform test
-        -filter=tests/integration/full_rbac_deployment.tftest.hcl
-        -verbose
-        -json | tee test-integ-full.jsonl
+    - terraform test -filter=tests/integ_full_rbac_deployment.tftest.hcl -verbose -json | tee test-integ-full.jsonl
     - echo "Integration tests passed."
   after_script:
     - cd ${LAB_DIR}
