@@ -94,7 +94,7 @@ security:tfsec:
   # tfsec image ships its own binary; override the terraform default image
   image: aquasec/tfsec:latest
   before_script:
-    - echo "==> tfsec version: $(tfsec --version)"
+    - echo "==> tfsec version $(tfsec --version)"
   script:
     - echo "==> Running tfsec on ${LAB_DIR}..."
     # --soft-fail: report findings but don't block the pipeline
@@ -128,7 +128,7 @@ test:unit:naming:
     - echo "==> Initialising Terraform for unit tests..."
     - terraform init -backend=false -input=false
     - echo ""
-    - echo "==> Running unit test: naming_convention"
+    - echo "==> Running unit test naming_convention"
     - terraform test
         -filter=tests/unit/naming_convention.tftest.hcl
         -verbose
@@ -161,7 +161,7 @@ test:unit:boundary:
   script:
     - terraform init -backend=false -input=false
     - echo ""
-    - echo "==> Running unit test: permission_boundary"
+    - echo "==> Running unit test permission_boundary"
     - terraform test
         -filter=tests/unit/permission_boundary.tftest.hcl
         -verbose
@@ -193,7 +193,7 @@ test:unit:rbac-separation:
   script:
     - terraform init -backend=false -input=false
     - echo ""
-    - echo "==> Running unit test: rbac_separation"
+    - echo "==> Running unit test rbac_separation"
     - terraform test
         -filter=tests/unit/rbac_separation.tftest.hcl
         -verbose
@@ -241,7 +241,7 @@ test:integ:full-rbac:
   script:
     - terraform init -backend=false -input=false
     - echo ""
-    - echo "==> Running integration test: full_rbac_deployment"
+    - echo "==> Running integration test full_rbac_deployment"
     - terraform test
         -filter=tests/integration/full_rbac_deployment.tftest.hcl
         -verbose
