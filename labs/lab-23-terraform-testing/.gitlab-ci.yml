@@ -1,0 +1,326 @@
+# ================================================================================
+# Lab 23 - Terraform Declarative Testing with .tftest.hcl
+#
+# Pipeline stages:
+#   validate      → fmt check + syntax validation
+#   security      → static analysis with tfsec
+#   test:unit     → unit tests (mock_provider, no AWS creds needed)
+#   test:integ    → integration tests (mock_provider, no AWS creds needed)
+#   report        → collect artifacts and generate summary
+#
+# All terraform test stages use mock_provider so the pipeline runs
+# without any cloud credentials. To run against a real AWS account
+# set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY as CI/CD variables
+# and add a separate "live" test job that omits mock_provider.
+# ================================================================================
+
+variables:
+  TF_VERSION:          "1.7.5"
+  TF_LOG:              ""                                     # Set to DEBUG to troubleshoot
+  TF_PLUGIN_CACHE_DIR: "${CI_PROJECT_DIR}/.terraform.d/plugin-cache"
+  LAB_DIR:             "."   # root of the repo — set to "labs/lab-23-terraform-testing" if using via GitLab include from the monorepo
+  # Controls which test suite runs on merge requests vs main
+  RUN_INTEGRATION_ON:  "main"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Global defaults – every job inherits these unless overridden
+# ─────────────────────────────────────────────────────────────────────────────
+default:
+  image: 
+    name: hashicorp/terraform:${TF_VERSION}
+    entrypoint: [""]
+  before_script:
+    - cd ${LAB_DIR}
+    - mkdir -p "${TF_PLUGIN_CACHE_DIR}"
+    - terraform version
+  cache:
+    key: "terraform-providers-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - ${LAB_DIR}/.terraform/
+      - .terraform.d/plugin-cache/
+    policy: pull-push
+
+stages:
+  - validate
+  - security
+  - test:unit
+  - test:integ
+  - report
+
+# ================================================================================
+# STAGE: validate
+# ================================================================================
+
+# Checks that all .tf files are canonically formatted.
+# Run `terraform fmt -recursive` locally to auto-fix.
+validate:fmt:
+  stage: validate
+  script:
+    - echo "==> Checking Terraform formatting..."
+    - terraform fmt -check -recursive -diff
+    - echo "Format check passed."
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# Downloads providers and validates HCL syntax + module references.
+# -backend=false skips remote state (not needed for this lab).
+validate:syntax:
+  stage: validate
+  script:
+    - echo "==> Initialising Terraform (no backend)..."
+    - terraform init -backend=false -input=false
+    - echo "==> Validating configuration..."
+    - terraform validate
+    - echo "Syntax validation passed."
+  artifacts:
+    paths:
+      - ${LAB_DIR}/.terraform.lock.hcl
+    expire_in: 1 day
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ================================================================================
+# STAGE: security
+# ================================================================================
+
+# tfsec performs static analysis looking for:
+#   - IAM wildcard actions/resources
+#   - Missing encryption
+#   - Overly permissive trust policies
+#   - Hardcoded credentials
+security:tfsec:
+  stage: security
+  needs: []      # run in parallel with validate — no ordering dependency
+  # tfsec image ships its own binary; override the terraform default image
+  image: 
+    name: aquasec/tfsec:latest
+    entrypoint: [""]
+  before_script:
+    - echo "==> tfsec version $(tfsec --version)"
+  script:
+    - echo "==> Running tfsec on ${LAB_DIR}..."
+    # --soft-fail: report findings but don't block the pipeline
+    # Remove --soft-fail to enforce security gates
+    - tfsec ${LAB_DIR} --soft-fail --format default
+    - tfsec ${LAB_DIR} --soft-fail --format json --out /tmp/tfsec-report.json
+    - cp /tmp/tfsec-report.json .
+    - echo "Security scan complete. Review findings in tfsec-report.json artifact."
+  artifacts:
+    paths:
+      - ${LAB_DIR}/tfsec-report.json
+    expire_in: 30 days
+    when: always   # keep report even if soft-fail triggers
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ================================================================================
+# STAGE: test:unit
+# ================================================================================
+
+# Runs the three unit test files under tests/unit/.
+# Each file declares mock_provider "aws" so no credentials are needed.
+# Tests are fast (<30 s) and safe to run on every commit.
+test:unit:naming:
+  stage: test:unit
+  needs:
+    - job: validate:syntax
+      artifacts: true
+  script:
+    - echo "==> Initialising Terraform for unit tests..."
+    - terraform init -backend=false -input=false
+    - echo ""
+    - echo "==> Running unit test naming_convention"
+    - terraform test -filter=tests/unit_naming_convention.tftest.hcl -verbose -json | tee test-unit-naming.jsonl
+    - echo "Naming convention unit tests passed."
+  after_script:
+    - cd ${LAB_DIR}
+    # Generate human-readable summary from JSONL
+    - |
+      if command -v python3 >/dev/null 2>&1; then
+        python3 scripts/tf-test-to-junit.py test-unit-naming.jsonl > test-unit-naming.xml 2>/dev/null || true
+      fi
+  artifacts:
+    when: always
+    paths:
+      - ${LAB_DIR}/test-unit-naming.jsonl
+      - ${LAB_DIR}/test-unit-naming.xml
+    reports:
+      junit: ${LAB_DIR}/test-unit-naming.xml
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+test:unit:boundary:
+  stage: test:unit
+  needs:
+    - job: validate:syntax
+      artifacts: true
+  script:
+    - terraform init -backend=false -input=false
+    - echo ""
+    - echo "==> Running unit test permission_boundary"
+    - terraform test -filter=tests/unit_permission_boundary.tftest.hcl -verbose -json | tee test-unit-boundary.jsonl
+    - echo "Permission boundary unit tests passed."
+  after_script:
+    - cd ${LAB_DIR}
+    - |
+      if command -v python3 >/dev/null 2>&1; then
+        python3 scripts/tf-test-to-junit.py test-unit-boundary.jsonl > test-unit-boundary.xml 2>/dev/null || true
+      fi
+  artifacts:
+    when: always
+    paths:
+      - ${LAB_DIR}/test-unit-boundary.jsonl
+      - ${LAB_DIR}/test-unit-boundary.xml
+    reports:
+      junit: ${LAB_DIR}/test-unit-boundary.xml
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+test:unit:rbac-separation:
+  stage: test:unit
+  needs:
+    - job: validate:syntax
+      artifacts: true
+  script:
+    - terraform init -backend=false -input=false
+    - echo ""
+    - echo "==> Running unit test rbac_separation"
+    - terraform test -filter=tests/unit_rbac_separation.tftest.hcl -verbose -json | tee test-unit-rbac.jsonl
+    - echo "RBAC separation unit tests passed."
+  after_script:
+    - cd ${LAB_DIR}
+    - |
+      if command -v python3 >/dev/null 2>&1; then
+        python3 scripts/tf-test-to-junit.py test-unit-rbac.jsonl > test-unit-rbac.xml 2>/dev/null || true
+      fi
+  artifacts:
+    when: always
+    paths:
+      - ${LAB_DIR}/test-unit-rbac.jsonl
+      - ${LAB_DIR}/test-unit-rbac.xml
+    reports:
+      junit: ${LAB_DIR}/test-unit-rbac.xml
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ================================================================================
+# STAGE: test:integ
+# ================================================================================
+
+# Integration test — validates the complete RBAC deployment scenario.
+# Also uses mock_provider so no real AWS account is needed.
+#
+# On feature branches: runs as manual (won't block MR).
+# On main/master: runs automatically.
+#
+# To run against a real AWS sandbox, add:
+#   variables:
+#     AWS_ACCESS_KEY_ID:     $AWS_SANDBOX_KEY
+#     AWS_SECRET_ACCESS_KEY: $AWS_SANDBOX_SECRET
+#   and remove mock_provider from the integration test file.
+test:integ:full-rbac:
+  stage: test:integ
+  needs:
+    - test:unit:naming
+    - test:unit:boundary
+    - test:unit:rbac-separation
+  script:
+    - terraform init -backend=false -input=false
+    - echo ""
+    - echo "==> Running integration test full_rbac_deployment"
+    - terraform test -filter=tests/integ_full_rbac_deployment.tftest.hcl -verbose -json | tee test-integ-full.jsonl
+    - echo "Integration tests passed."
+  after_script:
+    - cd ${LAB_DIR}
+    - |
+      if command -v python3 >/dev/null 2>&1; then
+        python3 scripts/tf-test-to-junit.py test-integ-full.jsonl > test-integ-full.xml 2>/dev/null || true
+      fi
+  artifacts:
+    when: always
+    paths:
+      - ${LAB_DIR}/test-integ-full.jsonl
+      - ${LAB_DIR}/test-integ-full.xml
+    reports:
+      junit: ${LAB_DIR}/test-integ-full.xml
+    expire_in: 14 days
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
+
+# ================================================================================
+# STAGE: report
+# ================================================================================
+
+# Collects all test artefacts and prints a summary to the job log.
+# Always runs, even when upstream tests fail, so you always get a report.
+report:summary:
+  stage: report
+  needs:
+    - job: test:unit:naming
+      artifacts: true
+    - job: test:unit:boundary
+      artifacts: true
+    - job: test:unit:rbac-separation
+      artifacts: true
+    - job: test:integ:full-rbac
+      artifacts: true
+      optional: true          # integration test may not have run
+  before_script:
+    - cd ${LAB_DIR}
+  script:
+    - |
+      echo "================================================================"
+      echo "  Terraform Test Suite Summary - Lab 23"
+      echo "================================================================"
+      echo ""
+      echo "Unit test results:"
+      for f in test-unit-*.jsonl; do
+        if [ -f "$f" ]; then
+          total=$(grep -c '"@type":"test_run"' "$f" 2>/dev/null || echo 0)
+          passed=$(grep '"status":"pass"' "$f" 2>/dev/null | wc -l | tr -d ' ')
+          failed=$(grep '"status":"fail"' "$f" 2>/dev/null | wc -l | tr -d ' ')
+          echo "  ${f}: ${passed}/${total} passed, ${failed} failed"
+        fi
+      done
+      echo ""
+      echo "Integration test results:"
+      for f in test-integ-*.jsonl; do
+        if [ -f "$f" ]; then
+          total=$(grep -c '"@type":"test_run"' "$f" 2>/dev/null || echo 0)
+          passed=$(grep '"status":"pass"' "$f" 2>/dev/null | wc -l | tr -d ' ')
+          failed=$(grep '"status":"fail"' "$f" 2>/dev/null | wc -l | tr -d ' ')
+          echo "  ${f}: ${passed}/${total} passed, ${failed} failed"
+        else
+          echo "  (no integration results — job may have been skipped)"
+        fi
+      done
+      echo ""
+      echo "All raw JSONL and JUnit XML artefacts are attached to this job."
+      echo "================================================================"
+  artifacts:
+    paths:
+      - ${LAB_DIR}/test-*.jsonl
+      - ${LAB_DIR}/test-*.xml
+      - ${LAB_DIR}/tfsec-report.json
+    expire_in: 30 days
+    when: always
+  when: always
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
