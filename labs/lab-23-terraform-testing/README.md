@@ -27,6 +27,7 @@ By completing this lab you will understand:
 | Git | Any recent version |
 
 Install Terraform locally:
+
 ```bash
 # macOS
 brew tap hashicorp/tap && brew install hashicorp/tap/terraform
@@ -34,7 +35,19 @@ brew tap hashicorp/tap && brew install hashicorp/tap/terraform
 # Linux (any distro)
 curl -fsSL https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip \
   | funzip > /usr/local/bin/terraform && chmod +x /usr/local/bin/terraform
+```
 
+```powershell
+# Windows (PowerShell)
+winget install HashiCorp.Terraform
+# or
+choco install terraform
+
+# NOTE: You MUST restart your PowerShell terminal after installation 
+# for the 'terraform' command to be recognized in your PATH.
+```
+
+```bash
 terraform version   # should print >= 1.7.0
 ```
 
