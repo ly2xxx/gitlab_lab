@@ -135,17 +135,18 @@ lab-23-terraform-testing/
 │       ├── variables.tf
 │       └── outputs.tf                # Exposes policy JSON for test assertions
 │
-├── tests/
-│   ├── unit/
-│   │   ├── naming_convention.tftest.hcl    # Resource naming patterns
-│   │   ├── permission_boundary.tftest.hcl  # Boundary on/off + policy content
-│   │   └── rbac_separation.tftest.hcl      # Group isolation + policy logic
-│   └── integration/
-│       └── full_rbac_deployment.tftest.hcl # End-to-end payments service scenario
+├── tests/                            # All test files live here (terraform test discovers this folder)
+│   ├── unit_naming_convention.tftest.hcl    # Unit: resource naming patterns
+│   ├── unit_permission_boundary.tftest.hcl  # Unit: boundary on/off + policy content
+│   ├── unit_rbac_separation.tftest.hcl      # Unit: group isolation + policy logic
+│   └── integ_full_rbac_deployment.tftest.hcl # Integration: end-to-end payments scenario
 │
 └── scripts/
     └── tf-test-to-junit.py           # Converts terraform test -json → JUnit XML
 ```
+
+> **Note:** Terraform discovers `.tftest.hcl` files only in the root directory and directly inside `tests/` — it does **not** recurse into subdirectories.
+> Files are prefixed `unit_` or `integ_` so you can target a category with `-filter`.
 
 ---
 
@@ -280,8 +281,47 @@ tests/unit/permission_boundary.tftest.hcl... in progress
 
 ### Step 2: Run a specific test file
 
+> **⚠️ Known Terraform Bug on Windows (GitHub [#34125](https://github.com/hashicorp/terraform/issues/34125)):**
+> The `-filter` flag does not work on Windows — it silently returns `0 passed, 0 failed`.
+> Use the `-test-directory` workaround below instead.
+
+**macOS / Linux** — `-filter` works normally:
 ```bash
-terraform test -filter=tests/unit/permission_boundary.tftest.hcl -verbose
+# Run a single unit test file
+terraform test -filter=tests/unit_permission_boundary.tftest.hcl -verbose
+
+# Run only unit tests
+terraform test \
+  -filter=tests/unit_naming_convention.tftest.hcl \
+  -filter=tests/unit_permission_boundary.tftest.hcl \
+  -filter=tests/unit_rbac_separation.tftest.hcl -verbose
+
+# Run the integration test only
+terraform test -filter=tests/integ_full_rbac_deployment.tftest.hcl -verbose
+```
+
+**Windows (PowerShell)** — use `-test-directory` workaround:
+
+Because `-filter` is broken on Windows, move the test files you want to run into a temporary subdirectory and point `-test-directory` at it:
+
+```powershell
+# Create a temp directory with only unit test files
+New-Item -ItemType Directory -Force -Path tests\_unit_only
+Copy-Item tests\unit_*.tftest.hcl tests\_unit_only\
+
+# Run unit tests only
+terraform test -test-directory=tests\_unit_only -verbose
+
+# Clean up
+Remove-Item -Recurse -Force tests\_unit_only
+```
+
+```powershell
+# Or run the integration test alone the same way
+New-Item -ItemType Directory -Force -Path tests\_integ_only
+Copy-Item tests\integ_*.tftest.hcl tests\_integ_only\
+terraform test -test-directory=tests\_integ_only -verbose
+Remove-Item -Recurse -Force tests\_integ_only
 ```
 
 ### Step 3: Run with JSON output (for CI/CD)
@@ -304,8 +344,13 @@ name = "${var.application_name}-${var.environment}"   # wrong order
 ```
 
 Re-run the tests:
+```powershell
+# Windows PowerShell
+terraform test -filter=tests\unit_naming_convention.tftest.hcl -verbose
+```
 ```bash
-terraform test -filter=tests/unit/naming_convention.tftest.hcl -verbose
+# macOS / Linux
+terraform test -filter=tests/unit_naming_convention.tftest.hcl -verbose
 ```
 
 You'll see the assertion fail with a descriptive error message. Revert the change.
